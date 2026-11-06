@@ -15,3 +15,14 @@ Two assistants were used, and both are listed here.
 | 6 | `07_seed` | Generate `memory_seed.py`: 56+ seeded memories and a 220-message history | Used as generated | low effort |
 
 Live model spend while testing the agent: the recorded e2e session used 20,652 input / 1,096 output tokens, $0.0125 (from `docs/traces/e2e-timeout-after-success.jsonl`).
+
+## What calls 04 and 05 actually did
+
+Calls 04 and 05 did not produce an agent implementation.
+
+- **04** (`04_prompt.md` in [docs/ai_transcript/](docs/ai_transcript/)) asked grok-agent to implement the agent layer in one call: `agent.py`, `router.py`, tools, context, memory, sanitize, trace, models, CLI, and the evals. The process was interrupted after about 11 minutes with no output. The prompt was too large for one tool-loop step. There is no completion log to paste, and this file does not invent one.
+- **05** (`05_partA_prompt.md` in [docs/ai_transcript/](docs/ai_transcript/)) split that work and retried. It stalled in a single generation step and was killed after about 24 minutes. Again, no token usage was recorded, and there is no turn-by-turn trace.
+
+The orchestrator (Grok Bot) wrote the agent layer against the tests that were already failing: `agent.py`, `router.py`, `tools.py`, `context.py`, `memory.py`, `sanitize.py`, `trace.py`, `models.py`, `cli.py`, and the eval harness and scenarios. Those modules were not “finished by the CLI and lightly edited.” Where the table says “none recorded,” that is the record.
+
+Later polish (system-prompt voice, approval copy, seed history, the search gate for time window and budget, this design note) is ordinary repo work on top of that layer. It is not a hidden successful 04/05 run.
