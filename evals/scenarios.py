@@ -417,7 +417,7 @@ def same_electrician_not_before_10(d):
 
 @scenario("context budget", "55+ memories and 220 prior messages: context ≤ budget; only active, explicit/confirmed facts")
 def context_budget(d):
-    h = Harness(d, budget=1200)
+    h = Harness(d, budget=2400)
     h.model.extend([say("ok")])
     mem = Memory(h.store, h.clock)
     seeded = seed_memories(mem)
@@ -427,8 +427,8 @@ def context_budget(d):
     bad = {m["id"] for m in mem.list(include_inactive=True)
            if m["status"] != "active" or (m["kind"] == "inferred" and not m["confirmed"])}
     other_service = {m["id"] for m in mem.list() if m["scope"] not in ("global", None)}
-    return (f"tokens={ctx['tokens']}/{ctx['budget']}, memories sent={len(ctx['memory_ids'])}, dropped msgs={ctx['dropped_messages']}",
-            [("≥50 seeded memories", len(seeded) >= 50), ("tokens within budget", ctx["tokens"] <= 1200),
+    return (f"request tokens={ctx['request_tokens']}/{ctx['budget']} (tool schemas {ctx['tool_tokens']}), memories sent={len(ctx['memory_ids'])}, dropped msgs={ctx['dropped_messages']}",
+            [("≥50 seeded memories", len(seeded) >= 50), ("whole request (context+tool schemas+scratch) within budget", ctx["request_tokens"] <= 2400),
              ("no forgotten/superseded/unconfirmed memory sent", not bad & set(ctx["memory_ids"])),
              ("no other-service memory sent (no service chosen yet)", not other_service & set(ctx["memory_ids"])),
              ("old history dropped, logged", ctx["dropped_messages"] > 0)], "")

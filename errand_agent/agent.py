@@ -65,7 +65,7 @@ def render_approval(approval: dict) -> str:
 
 class Agent:
     def __init__(self, env, model, store, clock, session_id: str = "default", user_id: str = "arjun",
-                 limits: Limits | None = None, trace_dir="traces", context_budget: int = 1800) -> None:
+                 limits: Limits | None = None, trace_dir="traces", context_budget: int = 4000) -> None:
         self.env, self.model, self.store, self.clock = env, model, store, clock
         self.session_id, self.user_id = session_id, user_id
         self.limits = limits or Limits()
@@ -73,7 +73,7 @@ class Agent:
         self.memory = Memory(store, clock)
         self.approvals = Approvals(store, clock)
         self.executor = Executor(env, store, self.approvals, clock)
-        self.context = ContextBuilder(store, self.memory, context_budget)
+        self.context = ContextBuilder(store, self.memory, context_budget, TOOL_SCHEMAS)
         self.router = Router(self)
         saved = store.load_workflow(session_id)
         self.workflow = Workflow.from_dict(saved) if saved else Workflow()
@@ -259,10 +259,11 @@ class Agent:
                 return self._limit(f"{int(self.limits.wall_clock_s)}s wall clock")
             ctx = self.context.build(self.session_id, SYSTEM_PROMPT, self.workflow,
                                      self.store.pending_approval(self.session_id), today=self.clock.now().isoformat())
+            messages = self.context.fit(ctx, scratch)
             self.tracer.event("context", turn=turns, memory_ids=ctx["memory_ids"], tokens=ctx["tokens"],
+                              request_tokens=ctx["request_tokens"], tool_tokens=ctx["tool_tokens"],
                               included_messages=ctx["included_messages"], dropped_messages=ctx["dropped_messages"],
                               budget=ctx["budget"])
-            messages = ctx["messages"] + scratch
             t0 = time.perf_counter()
             try:
                 resp = self.model.complete(messages, TOOL_SCHEMAS)

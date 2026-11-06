@@ -28,7 +28,7 @@ ACTIVE: list = []  # every harness created during a scenario; the runner checks 
 
 
 class Harness:
-    def __init__(self, workdir: Path, script=None, limits=None, budget=1800, seed=7, env=None, db="agent.db", **cfg):
+    def __init__(self, workdir: Path, script=None, limits=None, budget=4000, seed=7, env=None, db="agent.db", **cfg):
         ACTIVE.append(self)
         self.workdir = Path(workdir)
         self.workdir.mkdir(parents=True, exist_ok=True)

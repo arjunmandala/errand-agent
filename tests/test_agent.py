@@ -25,7 +25,7 @@ def say(text):
     return ModelResponse(text=text, usage={"input_tokens": 100, "output_tokens": 20})
 
 
-def make(tmp_path, script, limits=None, budget=1800, env=None, db="a.db", **cfg):
+def make(tmp_path, script, limits=None, budget=4000, env=None, db="a.db", **cfg):
     clock = env.clock if env else FakeClock(START)
     env = env or MockToolEnv(seed=7, clock=clock, config=ScenarioConfig(**cfg))
     model = ScriptedModel(script)
@@ -226,14 +226,14 @@ def test_memory_commands_and_context_exclusions(tmp_path):
 
 
 def test_context_budget_with_seeded_memories_and_long_history(tmp_path):
-    agent, env, model = make(tmp_path, [say("ok")] * 3, budget=1200)
+    agent, env, model = make(tmp_path, [say("ok")] * 3, budget=2400)
     mem = Memory(agent.store, agent.clock)
     seeded = seed_memories(mem)
     assert len(seeded) >= 50
     seed_conversation(agent.store, "s1", n=220)
     agent.handle("Book the same electrician as last time, but not before 10 a.m.")
     ctx = [e for e in agent.last_trace_events() if e["kind"] == "context"][-1]
-    assert ctx["tokens"] <= 1200
+    assert ctx["request_tokens"] <= 2400
     bad = {m["id"] for m in mem.list(include_inactive=True)
            if m["status"] != "active" or (m["kind"] == "inferred" and not m["confirmed"])}
     assert not bad & set(ctx["memory_ids"])
@@ -295,3 +295,25 @@ def test_regression_search_never_offers_slots_that_already_started(tmp_path):
     agent.handle("plumber in HSR this week")
     now = agent.clock.now().strftime("%Y-%m-%dT%H:%M")
     assert all(s > now for c in agent.workflow.candidates for s in c["slots"])
+
+
+def test_regression_whole_model_request_fits_budget_including_tools_and_scratch(tmp_path):
+    """Bug: the context event said tokens<=budget, but only counted system+history. A live grok-4.7 call
+    reported 2,652-4,027 input tokens against a 1,800 budget because tool schemas (~956 est. tokens) and this
+    turn's tool results (search results with many slots) were sent on top."""
+    agent, env, model = make(tmp_path, [
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("get_provider", provider_id="PLB-01"), call("get_provider", provider_id="PLB-02"),
+        call("list_bookings"), say("Here are some options."),
+    ], budget=2400)
+    seed_conversation(agent.store, "s1", n=220)
+    agent.handle("plumber in HSR this week")
+    ctxs = [e for e in agent.last_trace_events() if e["kind"] == "context"]
+    assert len(ctxs) == 6
+    assert all(c["request_tokens"] <= 2400 for c in ctxs), [c["request_tokens"] for c in ctxs]
+    from errand_agent.context import estimate_tokens
+    for msgs in model.calls:  # what the model actually received
+        sent = sum(estimate_tokens(m.get("content") or "") +
+                   (estimate_tokens(json.dumps(m["tool_calls"])) if m.get("tool_calls") else 0) for m in msgs)
+        assert sent + agent.context.tool_tokens <= 2400
