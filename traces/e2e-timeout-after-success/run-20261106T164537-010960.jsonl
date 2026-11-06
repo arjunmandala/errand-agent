@@ -1,0 +1,2 @@
+{"seq": 1, "ts": "2026-11-06T16:45:37.051367", "run_id": "run-20261106T164537-010960", "reason": "startup_recovery", "session_id": "e2e-timeout-after-success", "model": "grok-4.7", "state": "collecting", "limits": {"max_model_turns": 6, "max_tool_calls": 12, "wall_clock_s": 90.0}, "kind": "run_start"}
+{"seq": 2, "ts": "2026-11-06T16:45:37.052033", "run_id": "run-20261106T164537-010960", "reply_kind": "message", "text": "(nothing to recover)", "state": "collecting", "outcome_status": null, "kind": "run_end"}

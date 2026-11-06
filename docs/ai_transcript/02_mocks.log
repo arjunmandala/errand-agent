@@ -1,0 +1,18 @@
+[tool] list_dir {"path": "/workspace/errand-agent"}
+[tool] read_file {"path": "/workspace/errand-agent/tests/test_mocks.py"}
+[tool] list_dir {"path": "/workspace/errand-agent/errand_agent"}
+[tool] list_dir {"path": "/workspace/errand-agent/docs"}
+[tool] list_dir {"path": "/workspace/errand-agent/tests"}
+[tool] list_dir {"path": "/workspace/errand-agent/errand_agent/mocks"}
+[tool] read_file {"path": "/workspace/errand-agent/README.md"}
+[tool] run_shell {"cmd": "pdftotext -layout \"/workspace/errand-agent/docs/Engineering_Assignment.pdf\" - | head -c 80000", "timeout": 30}
+[tool] list_dir {"path": "/workspace/errand-agent/evals"}
+[tool] list_dir {"path": "/workspace/errand-agent/errand_agent/__pycache__"}
+[tool] run_shell {"cmd": "find /workspace/errand-agent -name '*.py' -not -path '*/.venv/*' -not -path '*/__pycache__/*' | head -100", "timeout": 15}
+[tool] run_shell {"cmd": "ls -la /workspace/errand-agent && find /workspace/errand-agent -name 'pyproject.toml' -o -name 'setup.py' -o -name 'conftest.py' | head", "timeout": 10}
+[tool] write_file {"path": "/workspace/errand-agent/errand_agent/clock.py", "content": "\"\"\"Wall clock and a deterministic stand-in for tests.\"\"\"\n\nimport time\nfrom datetime import datetime, timedelta\n\n\nclass Clock:\n    def now(self) -> datetime:\n        return datetime.now()\n\n    def sleep(self, second
+[tool] write_file {"path": "/workspace/errand-agent/errand_agent/mocks/data.py", "content": "\"\"\"Static provider catalogue for the mock tool environment.\n\nSix providers per service. Provider ``*-02`` in every service carries exactly one\nprompt-injection review. Electrician ELE-03's technician is Ravi Kumar.\n\"\
+[tool] write_file {"path": "/workspace/errand-agent/errand_agent/mocks/env.py", "content": "\"\"\"In-process mock of the errand tool environment (seeded, scenario-driven).\"\"\"\n\nfrom __future__ import annotations\n\nimport random\nfrom dataclasses import dataclass, field\nfrom datetime import datetime, timedelta\n
+[tool] run_shell {"cmd": "cd /workspace/errand-agent && .venv/bin/pytest tests/test_mocks.py -q", "timeout": 60}
+[wrote /workspace/errand_ai_logs/02_mocks.md]
+[usage] {"input_tokens": 117340, "output_tokens": 24645, "total_tokens": 141985, "reasoning_tokens": 17940, "cached_tokens": 79360, "cost_usd": 0.089595, "model": "grok-4.7", "calls": 8, "seconds": 264.3, "local_tool_calls": ["list_dir", "read_file", "list_dir", "list_dir", "list_dir", "list_dir", "read_file", "run_shell", "list_dir", "list_dir", "run_shell", "run_shell", "write_file", "write_file", "write_file", "run_shell"]}
