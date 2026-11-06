@@ -245,6 +245,21 @@ def test_memory_commands_and_context_exclusions(tmp_path):
     assert "earliest_time" in listing.text and "inferred" in listing.text
 
 
+def test_seed_history_has_no_case_padding_and_stays_long_enough(tmp_path):
+    agent, env, model = make(tmp_path, [say("ok")])
+    n = seed_conversation(agent.store, "s1", n=220)
+    assert n == 220
+    rows = agent.store.recent_messages("s1", limit=500)
+    assert len(rows) == 220
+    import re
+    for m in rows:
+        assert not re.search(r"Case \d{3}", m["content"])
+        assert "routine local errand" not in m["content"]
+        assert 80 <= len(m["content"]) <= 200
+    seeded = seed_memories(Memory(agent.store, agent.clock))
+    assert len(seeded) >= 50
+
+
 def test_context_budget_with_seeded_memories_and_long_history(tmp_path):
     agent, env, model = make(tmp_path, [say("ok")] * 3, budget=2400)
     mem = Memory(agent.store, agent.clock)
