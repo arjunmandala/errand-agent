@@ -61,7 +61,7 @@ class Workflow:
         "preferences",
         "provider_id",
     )
-    REQUIRED = ["service", "area", "date_range"]
+    REQUIRED = ["service", "area", "date_range", "time_window", "budget_max"]
 
     def __init__(self) -> None:
         self.state = State.COLLECTING

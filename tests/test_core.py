@@ -34,9 +34,38 @@ def test_workflow_any_state_can_reset_to_collecting_or_fail():
 
 def test_workflow_missing_fields_only_lists_unknown_required():
     wf = Workflow()
-    assert wf.missing() == ["service", "area", "date_range"]
+    assert wf.missing() == ["service", "area", "date_range", "time_window", "budget_max"]
     wf.update(service="plumber", area="HSR Layout")
-    assert wf.missing() == ["date_range"]
+    assert wf.missing() == ["date_range", "time_window", "budget_max"]
+    wf.update(date_range=WEEK, time_window="morning", budget_max=1500)
+    assert wf.missing() == []
+
+
+def test_workflow_explicit_waivers_count_as_set():
+    """time_window='any' is set. budget_max=0 is set and means no cap, not 'missing'."""
+    wf = Workflow()
+    wf.update(service="plumber", area="HSR Layout", date_range=WEEK, time_window="any", budget_max=0)
+    assert wf.missing() == []
+    assert wf.request["time_window"] == "any"
+    assert wf.request["budget_max"] == 0
+
+
+def test_apply_filters_skips_budget_when_zero():
+    from errand_agent.router import Router
+    providers = [
+        {"id": "P1", "name": "A", "price": 900, "rating": 4.5, "attributes": {}, "slots": ["2026-11-11T09:00"]},
+        {"id": "P2", "name": "B", "price": 4000, "rating": 4.2, "attributes": {}, "slots": ["2026-11-11T09:30"]},
+    ]
+    both = Router.apply_filters(providers, {"budget_max": 0, "time_window": "any"})
+    assert {p["id"] for p in both} == {"P1", "P2"}
+    both_str = Router.apply_filters(providers, {"budget_max": "0", "time_window": "morning"})
+    assert {p["id"] for p in both_str} == {"P1", "P2"}
+    capped = Router.apply_filters(providers, {"budget_max": 1500, "time_window": "morning"})
+    assert [p["id"] for p in capped] == ["P1"]
+    # None / absent budget also does not invent a cap (search should not reach here without a set field,
+    # but the filter must not treat a missing cap as price <= 0).
+    uncapped = Router.apply_filters(providers, {"time_window": "any"})
+    assert {p["id"] for p in uncapped} == {"P1", "P2"}
 
 
 def test_workflow_correction_preserves_unrelated_fields():
