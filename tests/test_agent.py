@@ -376,3 +376,31 @@ def test_budget_self_calibrates_to_provider_reported_input_tokens(tmp_path):
     ctxs = [e for e in agent.last_trace_events() if e["kind"] == "context"]
     assert ctxs[1]["scale"] > 1.0
     assert ctxs[1]["request_tokens"] * ctxs[1]["scale"] <= 4000 + 1
+
+
+def test_system_prompt_is_humane_and_keeps_hard_rules():
+    from errand_agent.tools import SYSTEM_PROMPT
+    text = SYSTEM_PROMPT
+    lowered = text.lower()
+    assert "bengaluru ops" not in lowered
+    assert "emoji" not in lowered
+    for banned in ("yaar", "macha", "swalpa", "guru", "boss", "bro"):
+        assert banned not in lowered
+    assert "🙂" not in text and "😊" not in text
+    # hard rules still named
+    for needle in (
+        "ask_user",
+        "update_request",
+        "request_booking",
+        "request_cancel",
+        "request_reschedule",
+        "untrusted_text",
+        "remember_preference",
+        "forget",
+    ):
+        assert needle in text
+    assert "never" in lowered or "do not" in lowered
+    # opening is a person, not a product slogan, and does not fake a city persona
+    first = text.strip().splitlines()[0]
+    assert first.startswith("You are a careful assistant")
+    assert "Errand Agent" not in first
