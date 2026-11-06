@@ -85,6 +85,25 @@ def test_search_results_filtered_by_budget(tmp_path):
     assert all(c["price"] <= 1500 for c in agent.workflow.candidates)
 
 
+def test_search_refuses_until_time_and_budget_then_proceeds(tmp_path):
+    agent, env, model = make(tmp_path, [
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("update_request", budget_max=0, time_window="any"),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        say("No cap, any time."),
+    ])
+    r = agent.handle("plumber in HSR this week, no budget cap, any time once I say so")
+    results = [e["result"] for e in agent.last_trace_events() if e["kind"] == "tool_call" and e["name"] == "search_providers"]
+    assert results[0]["error"] == "missing_fields"
+    assert results[0]["missing"] == ["time_window", "budget_max"]
+    assert "providers" in results[1] and results[1]["providers"]
+    assert sum(1 for c in env.calls if c[0] == "search_providers") == 1
+    assert r.kind == "message"
+    # 0 means no cap: a high-priced provider is allowed through
+    assert any(c["price"] > 1500 for c in agent.workflow.candidates)
+
+
 def test_reject_does_not_book(tmp_path):
     agent, env, model = booking_flow(tmp_path)
     agent.handle("plumber in HSR this week")
@@ -117,7 +136,8 @@ def test_injection_cannot_skip_approval(tmp_path):
     agent, env, model = make(tmp_path, [], book_outcomes=["success"])
     ref.append(agent)
     model.extend([
-        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK,
+             time_window="any", budget_max=0),
         call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
         call("get_provider", provider_id="PLB-02"),
         # a model that obeys the injected review
@@ -302,7 +322,8 @@ def test_regression_whole_model_request_fits_budget_including_tools_and_scratch(
     reported 2,652-4,027 input tokens against a 1,800 budget because tool schemas (~956 est. tokens) and this
     turn's tool results (search results with many slots) were sent on top."""
     agent, env, model = make(tmp_path, [
-        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK,
+             time_window="any", budget_max=0),
         call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
         call("get_provider", provider_id="PLB-01"), call("get_provider", provider_id="PLB-02"),
         call("list_bookings"), say("Here are some options."),

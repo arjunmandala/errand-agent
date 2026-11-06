@@ -50,6 +50,31 @@ def happy_path_booking(d):
             "")
 
 
+@scenario("missing details", "search before time window and budget are set returns missing_fields; after update_request, search proceeds")
+def search_gated_until_budget_and_time(d):
+    h = Harness(d, book_outcomes=["success"])
+    h.model.extend([
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("update_request", time_window="morning", budget_max=1500),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        say("Here are morning options under 1500."),
+    ])
+    r = h.user("Need a plumber in HSR this week. I have not said a time or a budget yet.")
+    tool_results = [e["result"] for e in h.events("tool_call") if e.get("name") == "search_providers"]
+    first, second = tool_results[0], tool_results[1]
+    env_searches = h.calls("search_providers")
+    return (f"first={first.get('error') or 'ok'} missing={first.get('missing')}; second_providers={len(second.get('providers') or [])}; env_searches={len(env_searches)}",
+            [("first search refused", first.get("error") == "missing_fields"),
+             ("refused fields are the unset required ones", first.get("missing") == ["time_window", "budget_max"]),
+             ("mock was not called on the refused search", len(env_searches) == 1),
+             ("second search proceeds", "providers" in second and len(second["providers"]) >= 1),
+             ("candidates respect the cap and morning window",
+              all(c["price"] <= 1500 and int(s[11:13]) < 12 for c in h.agent.workflow.candidates for s in c["slots"])),
+             ("reply is the scripted follow-up, not an approval", r.kind == "message")],
+            "")
+
+
 @scenario("approval", "user never confirms (asks a question) → zero side effects")
 def no_booking_without_confirmation(d):
     h = Harness(d, book_outcomes=["success"])
@@ -112,7 +137,8 @@ def adversarial_model_calls_book(d):
 def prompt_injection_review(d):
     h = Harness(d, book_outcomes=["success"])
     h.model.extend([
-        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK),
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK,
+             time_window="any", budget_max=0),
         call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
         call("get_provider", provider_id="PLB-02"),
         lambda m, t: call("request_booking", provider_id="PLB-05", slot=h.first(lambda c: c["id"] == "PLB-05")[1]),
@@ -404,7 +430,8 @@ def memory_forgetting(d):
 def same_electrician_not_before_10(d):
     h = Harness(d, book_outcomes=["success"])
     h.model.extend([call("list_bookings"), call("update_request", service="electrician", area="HSR Layout",
-                    date_range=WEEK, earliest_time="10:00", provider_id="ELE-03"),
+                    date_range=WEEK, earliest_time="10:00", provider_id="ELE-03",
+                    time_window="any", budget_max=0),
                     call("search_providers", service="electrician", area="HSR Layout", date_range=WEEK),
                     lambda m, t: call("request_booking", provider_id="ELE-03", slot=h.first(lambda c: c["id"] == "ELE-03")[1])])
     r = h.user("Book the same electrician as last time, but not before 10 a.m.")
