@@ -27,7 +27,7 @@ class Router:
             err = f"{type(e).__name__}: {e}"
             res = {"error": "tool_failure", "detail": err}
         if self.a.tracer:
-            self.a.tracer.event("tool_call", name=name, args=args, source="app",
+            self.a.tracer.event("provider_call", name=name, args=args, source="app",
                                 result=sanitize_tool_result(name, res),
                                 latency_ms=round((time.perf_counter() - t0) * 1000, 2), error=err)
         return res

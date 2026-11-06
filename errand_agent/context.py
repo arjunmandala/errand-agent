@@ -27,6 +27,7 @@ class ContextBuilder:
                   "slots": c["slots"][:4]} for c in workflow.candidates[:6]]
         data = {"today": today, "state": workflow.state.value, "request": workflow.request,
                 "missing": workflow.missing(), "candidates": cands}
+        data["pending_approval"] = "none: nothing is awaiting the user's confirmation"
         if pending_approval:
             data["pending_approval"] = {"action": pending_approval["action"], "details": {
                 k: pending_approval["details"].get(k) for k in ("provider_id", "provider_name", "slot", "price", "booking_id")}}

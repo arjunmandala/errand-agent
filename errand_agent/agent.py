@@ -19,6 +19,20 @@ from errand_agent.trace import Tracer
 from errand_agent.workflow import TRANSITIONS, State, Workflow
 
 SUCCESS_CLAIM = re.compile(r"\b(booked|confirmed|cancelled|canceled|rescheduled|all set)\b", re.IGNORECASE)
+NEGATION = re.compile(r"\b(not|nothing|no|never|yet to|haven't|hasn't|wasn't|isn't|didn't|won't|before)\b|n't\b", re.IGNORECASE)
+NARRATED_ACTION = re.compile(r"\b(proposing|i'll book|i will book|booking (?:it|this|that) now|i'?ve held|holding (?:the|a|this)|"
+                             r"the app will (?:show|ask)|sending (?:it|this) for (?:your )?(?:confirmation|approval))\b", re.IGNORECASE)
+NUDGE = ("[app] You described proposing or performing an action but did not call request_booking / request_cancel / "
+         "request_reschedule, so nothing is awaiting the user's confirmation. Call the right request_* tool now, or ask "
+         "the user a question. Do not describe actions you have not taken.")
+
+
+def claims_success(text: str) -> bool:
+    """True if any sentence asserts a booking/cancellation happened (negated sentences don't count)."""
+    for sentence in re.split(r"(?<=[.!?\n])\s+", text or ""):
+        if SUCCESS_CLAIM.search(sentence) and not NEGATION.search(sentence):
+            return True
+    return False
 SAFE_NO_CLAIM = "Nothing has been reserved or changed yet; I only report a booking after the booking service confirms it. Want me to look for options?"
 
 
@@ -250,6 +264,7 @@ class Agent:
     def _model_loop(self) -> Reply:
         started = self.clock.now()
         turns = tool_calls = 0
+        nudged = False
         scratch: list[dict] = []
         while True:
             if turns >= self.limits.max_model_turns:
@@ -278,6 +293,11 @@ class Agent:
                               output_tokens=resp.usage.get("output_tokens", 0), cost_usd=resp.cost_usd,
                               tool_calls=[tc.name for tc in resp.tool_calls], text=resp.text)
             if not resp.tool_calls:
+                if NARRATED_ACTION.search(resp.text or "") and not nudged:
+                    nudged = True
+                    self.tracer.event("nudge", reason="narrated_action_without_tool_call", text=resp.text)
+                    scratch += [{"role": "assistant", "content": resp.text}, {"role": "system", "content": NUDGE}]
+                    continue
                 return self._guarded_text(resp.text or "")
             scratch.append({"role": "assistant", "content": resp.text or "",
                             "tool_calls": [{"id": tc.id, "name": tc.name, "args": tc.args} for tc in resp.tool_calls]})
@@ -293,7 +313,7 @@ class Agent:
 
     def _guarded_text(self, text: str) -> Reply:
         verified = any(o.get("status") in ("confirmed", "cancelled") for o in self.run_outcomes)
-        if SUCCESS_CLAIM.search(text) and not verified and not self._claim_is_historical(text):
+        if claims_success(text) and not verified and not self._claim_is_historical(text):
             self.tracer.event("blocked_claim", text=text)
             return Reply(text=SAFE_NO_CLAIM, kind="message")
         return Reply(text=text or "(no reply)", kind="message")
@@ -369,7 +389,7 @@ class Agent:
                        "not_before": self.clock.now().strftime("%Y-%m-%dT%H:%M")}
         head = (f"Heads up: {b['provider_name']} cancelled your {service} booking on {fmt_slot(b['slot'])}. ")
         found = self.env.search_providers(service, area, date_range)
-        self.tracer.event("tool_call", name="search_providers", args={"service": service, "area": area,
+        self.tracer.event("provider_call", name="search_providers", args={"service": service, "area": area,
                           "date_range": date_range}, result={"count": len(found.get("providers", []))})
         cands = [c for c in self.router.apply_filters(found.get("providers", []), constraints)
                  if c["id"] != b["provider_id"]]

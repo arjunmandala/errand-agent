@@ -317,3 +317,28 @@ def test_regression_whole_model_request_fits_budget_including_tools_and_scratch(
         sent = sum(estimate_tokens(m.get("content") or "") +
                    (estimate_tokens(json.dumps(m["tool_calls"])) if m.get("tool_calls") else 0) for m in msgs)
         assert sent + agent.context.tool_tokens <= 2400
+
+
+def test_regression_narrated_proposal_without_tool_call_is_nudged(tmp_path):
+    """Bug (live grok-4.7 run): user said 'book the best rated one'; the model replied 'Proposing TapMasters ...
+    the app will show the exact details' as plain text without calling request_booking. No approval existed, the
+    user's 'yes' matched nothing, and the model then invented an expired hold."""
+    agent, env, model = booking_flow(tmp_path)
+    agent.handle("plumber in HSR this week")  # consumes the scripted search + request
+    agent.store.update_approval(agent.store.pending_approval("s1")["id"], status="rejected")
+    model.extend([
+        say("Proposing PLB-01 for Tuesday 09:00, the app will show the exact details for you to confirm."),
+        lambda m, t: call("request_booking", provider_id=first_candidate(agent)[0], slot=first_candidate(agent)[1]),
+    ])
+    r = agent.handle("ok book the best rated one")
+    nudges = [e for e in agent.last_trace_events() if e["kind"] == "nudge"]
+    assert nudges and r.kind == "approval_request"
+
+
+def test_regression_claim_guard_allows_negative_statements(tmp_path):
+    """Bug (same live run): the success-claim guard matched 'nothing was booked' and replaced an honest
+    negative answer with a canned message."""
+    agent, env, model = make(tmp_path, [say("Nothing was booked yet. Shall I hold a slot?"),
+                                        say("I have not booked or cancelled anything.")])
+    assert agent.handle("did you book it?").text == "Nothing was booked yet. Shall I hold a slot?"
+    assert agent.handle("and cancel?").text == "I have not booked or cancelled anything."
