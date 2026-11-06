@@ -102,10 +102,21 @@ _ASSIST_LINES = (
 )
 
 
+_DETAIL = (
+    "The visit should stay on a weekday and inside the saved budget.",
+    "Please keep the arrival note short and skip a phone call.",
+    "Use Gate 2 and the basement visitor bay, not the main ramp.",
+    "Do not plan power tools during quiet hours or after 18:00.",
+    "Leave the shoe rack and the linen cupboard unless asked.",
+)
+
+
 def _fit(text, index):
-    body = f"{text} Case {index:03d} stays a routine local errand."
+    body = text.strip()
     if len(body) < 80:
-        body = body + " Extra context is only scheduling preference, not a new request."
+        body = f"{body} {_DETAIL[index % len(_DETAIL)]}"
+    if len(body) < 80:
+        body = body + " This is a scheduling note for the same home, not a new errand."
     if len(body) > 200:
         body = body[:197].rstrip() + "..."
     if len(body) < 80:
