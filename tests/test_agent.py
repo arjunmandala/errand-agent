@@ -404,3 +404,18 @@ def test_system_prompt_is_humane_and_keeps_hard_rules():
     first = text.strip().splitlines()[0]
     assert first.startswith("You are a careful assistant")
     assert "Errand Agent" not in first
+
+
+def test_approval_copy_is_specific_and_not_a_form_letter(tmp_path):
+    agent, env, model = booking_flow(tmp_path)
+    r = agent.handle("Find a plumber this week mornings under 1500 in HSR")
+    text = r.text
+    d = r.approval["details"]
+    assert d["provider_id"] in text
+    assert d["provider_name"] in text
+    assert str(d["price"]) in text
+    assert "Please confirm:" not in text
+    assert "Reply \"yes\" to confirm or \"no\" to cancel." not in text
+    assert "yes" in text.lower() and "no" in text.lower()
+    # hold expiry still visible as HH:MM
+    assert d["hold_expires_at"][11:16] in text or d["hold_expires_at"][-5:] in text

@@ -49,7 +49,8 @@ def main(argv=None) -> None:
     agent = build(args)
     for r in agent.start():
         print(f"agent> {r.text}")
-    print(f"Errand Agent (session {args.session}, scenario {args.scenario}). Traces in {args.traces}/{args.session}/")
+    print(f"Ready (session {args.session}, scenario {args.scenario}). Traces in {args.traces}/{args.session}/.")
+    print("Ask for a service, or use /memory, /tick, /trace, /quit.")
     while True:
         try:
             text = input("you> ").strip()
