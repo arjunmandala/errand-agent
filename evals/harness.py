@@ -64,8 +64,17 @@ class Harness:
         return cands[0]["id"], cands[0]["slots"][0]
 
     def search_and_request(self, service="plumber", area="HSR Layout", pick=None, **req):
+        """Script a collect → search → request_booking turn.
+
+        Callers that care about a real cap or window pass budget_max / time_window.
+        Callers that only need a booking pass nothing: time_window='any' and
+        budget_max=0 are explicit waivers (0 means no cap), not inferred defaults
+        inside the router.
+        """
+        fields = {"time_window": "any", "budget_max": 0}
+        fields.update(req)
         return [
-            call("update_request", service=service, area=area, date_range=WEEK, **req),
+            call("update_request", service=service, area=area, date_range=WEEK, **fields),
             call("search_providers", service=service, area=area, date_range=WEEK),
             lambda m, t: call("request_booking", provider_id=self.first(pick)[0], slot=self.first(pick)[1]),
         ]
