@@ -34,13 +34,21 @@ class Router:
 
     @staticmethod
     def apply_filters(providers: list[dict], c: dict) -> list[dict]:
-        """App-side constraint filter: budget, time window, earliest time."""
+        """App-side constraint filter: budget, time window, earliest time.
+
+        budget_max of 0 or "0" is an explicit waiver: no price cap. A missing
+        budget is also not a cap (the search gate should have refused first).
+        """
         out = []
         lo, hi = WINDOWS.get(c.get("time_window") or "", (0, 24))
         earliest = c.get("earliest_time")
         not_before = c.get("not_before") or ""
+        raw_budget = c.get("budget_max")
+        budget_cap = None
+        if raw_budget not in (None, 0, "0", ""):
+            budget_cap = int(raw_budget)
         for p in providers:
-            if c.get("budget_max") and p["price"] > int(c["budget_max"]):
+            if budget_cap is not None and p["price"] > budget_cap:
                 continue
             slots = [s for s in p["slots"] if lo <= int(s[11:13]) < hi and (not earliest or s[11:16] >= earliest)
                      and s > not_before]
