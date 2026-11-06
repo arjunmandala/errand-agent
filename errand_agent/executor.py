@@ -220,8 +220,9 @@ class Executor:
         booking = dict(res)
         if "booking_id" not in booking and booking.get("id"):
             booking["booking_id"] = booking["id"]
-        if details.get("service") and not booking.get("service"):
-            booking["service"] = details.get("service")
+        for k in ("service", "area", "provider_name", "replaces"):
+            if details.get(k) and not booking.get(k):
+                booking[k] = details[k]
         booking["status"] = "confirmed"
         self.store.finish_operation(key, "confirmed", booking)
         self.approvals.consume(approval["id"])

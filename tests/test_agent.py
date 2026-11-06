@@ -286,3 +286,12 @@ def test_trace_contains_required_event_kinds(tmp_path):
     assert {"run_start", "context", "model_call", "tool_call", "state_transition", "approval", "run_end"} <= kinds
     mc = [e for e in agent.last_trace_events() if e["kind"] == "model_call"][0]
     assert {"latency_ms", "input_tokens", "output_tokens", "cost_usd"} <= set(mc)
+
+
+def test_regression_search_never_offers_slots_that_already_started(tmp_path):
+    """Bug: mock returns today's slots from 08:00; at 08:00 the agent proposed (and booked) a slot that had
+    already started, and tick() later treated its provider cancellation as 'in the past' and stayed silent."""
+    agent, env, model = booking_flow(tmp_path)
+    agent.handle("plumber in HSR this week")
+    now = agent.clock.now().strftime("%Y-%m-%dT%H:%M")
+    assert all(s > now for c in agent.workflow.candidates for s in c["slots"])
