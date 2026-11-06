@@ -60,21 +60,26 @@ def fmt_slot(slot: str) -> str:
 
 
 def render_approval(approval: dict) -> str:
-    """The app (not the model) renders the exact material details the user approves."""
+    """The app (not the model) renders the exact material details the user approves.
+
+    Wrapper phrasing is a short question. Provider, slot, price, hold expiry,
+    and booking ids stay exact so the user is approving a digest, not a vibe.
+    """
     d, action = approval["details"], approval["action"]
     who = f"{d.get('provider_name', d.get('provider_id'))} ({d.get('provider_id')})"
     if action == "book":
         note = ""
         if d.get("search_price") is not None and d["search_price"] != d["price"]:
-            note = f" Note: the quoted price is ₹{d['price']}, search showed ₹{d['search_price']}."
-        exp = f" The slot is held until {fmt_slot(d['hold_expires_at'])[-5:]}." if d.get("hold_expires_at") else ""
-        return (f"Please confirm: book {who} for {d.get('service')} on {fmt_slot(d['slot'])} at ₹{d['price']}"
-                f"{' in ' + d['area'] if d.get('area') else ''}.{note}{exp} Reply \"yes\" to confirm or \"no\" to cancel.")
+            note = f" Quoted price is ₹{d['price']}; search showed ₹{d['search_price']}."
+        exp = f" Held until {fmt_slot(d['hold_expires_at'])[-5:]}." if d.get("hold_expires_at") else ""
+        where = f" in {d['area']}" if d.get("area") else ""
+        return (f"Want me to book {who} for {d.get('service')} on {fmt_slot(d['slot'])} "
+                f"at ₹{d['price']}{where}?{note}{exp} Yes to book, or no to leave it.")
     if action == "cancel":
-        return (f"Please confirm: cancel booking {d['booking_id']} with {who} on {fmt_slot(d['slot'])}. "
-                "Reply \"yes\" to confirm or \"no\" to keep it.")
-    return (f"Please confirm: move booking {d['booking_id']} with {who} from {fmt_slot(d['old_slot'])} to "
-            f"{fmt_slot(d['slot'])}. Reply \"yes\" to confirm or \"no\" to keep the current slot.")
+        return (f"Cancel {d['booking_id']} with {who} on {fmt_slot(d['slot'])}? "
+                "Yes to cancel, or no to keep it.")
+    return (f"Move {d['booking_id']} with {who} from {fmt_slot(d['old_slot'])} to "
+            f"{fmt_slot(d['slot'])}? Yes to move it, or no to keep the current slot.")
 
 
 class Agent:
@@ -193,7 +198,7 @@ class Agent:
                     self.tracer.event("approval", event="rejected", approval_id=pending["id"])
                     self.goto(State.PROPOSING if self.workflow.candidates and pending["action"] == "book"
                               else State.COLLECTING)
-                    return self._finish(Reply(text="Okay, I won't go ahead. Nothing was booked or changed.",
+                    return self._finish(Reply(text="Okay, leaving it. Nothing was booked or changed.",
                                               kind="message"))
             return self._finish(self._model_loop())
         except Exception as e:  # every exit path produces a user-facing outcome
@@ -258,7 +263,7 @@ class Agent:
         summary = f"Current step: {self.workflow.state.value}"
         if self.workflow.request:
             summary += f", request so far: {json.dumps(self.workflow.request)}"
-        return Reply(text=f"I stopped after hitting my safety limit ({which}) before finishing. Nothing was booked "
+        return Reply(text=f"I hit a safety limit ({which}) and stopped before finishing. Nothing was booked "
                           f"or changed. {summary}. Tell me how you'd like to continue.", kind="limit")
 
     def _model_loop(self) -> Reply:
@@ -285,7 +290,7 @@ class Agent:
             except Exception as e:
                 self.tracer.event("model_call", turn=turns, error=str(e), latency_ms=round((time.perf_counter() - t0) * 1000, 1),
                                   input_tokens=0, output_tokens=0, cost_usd=0.0)
-                return Reply(text=f"Sorry, I couldn't reach the language model ({type(e).__name__}). "
+                return Reply(text=f"I couldn't reach the language model ({type(e).__name__}). "
                                   "Nothing was booked or changed.", kind="error")
             turns += 1
             self.context.calibrate(ctx["request_tokens"], resp.usage.get("input_tokens", 0))
@@ -352,7 +357,7 @@ class Agent:
         if name == "/confirm" and arg:
             n = self.memory.confirm(arg)
             return Reply(text=f"Confirmed {arg}." if n else f"No inferred preference named {arg}.")
-        return Reply(text="Commands: /memory, /remember key=value, /correct key=value, /forget key, /confirm key")
+        return Reply(text="I can do /memory, /remember key=value, /correct key=value, /forget key, /confirm key.")
 
     # ------------------------------------------------------------------ proactive follow-up
     def tick(self) -> list[Reply]:
