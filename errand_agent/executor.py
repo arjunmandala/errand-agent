@@ -44,7 +44,7 @@ class Executor:
             return
         end = self.clock.now()
         latency_ms = int((end - start).total_seconds() * 1000)
-        payload = {"name": name, "args": args, "latency_ms": latency_ms}
+        payload = {"name": name, "args": args, "latency_ms": latency_ms, "source": "executor"}
         if error is not None:
             payload["error"] = f"{type(error).__name__}: {error}"
         else:

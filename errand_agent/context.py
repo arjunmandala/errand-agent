@@ -21,6 +21,12 @@ class ContextBuilder:
         self.budget = budget_tokens
         self.tool_tokens = estimate_tokens(json.dumps(tool_schemas)) if tool_schemas else 0
         self.context_budget = max(self.budget - self.tool_tokens, 0)
+        self.scale = 1.0  # provider-reported / estimated tokens, learned from live usage
+
+    def calibrate(self, estimated: int, reported: int) -> None:
+        """Track how far chars/4 under-counts the provider's tokenizer (EMA, never below 1.0)."""
+        if estimated > 0 and reported > 0:
+            self.scale = max(1.0, 0.5 * self.scale + 0.5 * (reported / estimated))
 
     def _workflow_summary(self, workflow, pending_approval, today: str | None) -> str:
         cands = [{"id": c["id"], "name": c["name"], "price": c["price"], "rating": c["rating"],
@@ -78,7 +84,7 @@ class ContextBuilder:
     def fit(self, ctx: dict, scratch: list[dict]) -> list[dict]:
         """Make system+history+scratch+tool schemas fit the budget: compact older tool results first, then drop
         the oldest history, then truncate the newest tool result. Returns the messages to send."""
-        allowance = self.context_budget
+        allowance = int(self.budget / self.scale) - self.tool_tokens
         sys_msg, history = ctx["messages"][0], list(ctx["messages"][1:])
         over = lambda: self.message_tokens([sys_msg] + history + scratch) > allowance
         tool_idx = [i for i, m in enumerate(scratch) if m.get("role") == "tool"]
@@ -98,4 +104,5 @@ class ContextBuilder:
             last["content"] = last["content"][:keep] + "…(truncated for budget)"
         msgs = [sys_msg] + history + scratch
         ctx["request_tokens"] = self.message_tokens(msgs) + self.tool_tokens
+        ctx["scale"] = round(self.scale, 3)
         return msgs

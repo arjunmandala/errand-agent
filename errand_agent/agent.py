@@ -278,7 +278,7 @@ class Agent:
             self.tracer.event("context", turn=turns, memory_ids=ctx["memory_ids"], tokens=ctx["tokens"],
                               request_tokens=ctx["request_tokens"], tool_tokens=ctx["tool_tokens"],
                               included_messages=ctx["included_messages"], dropped_messages=ctx["dropped_messages"],
-                              budget=ctx["budget"])
+                              budget=ctx["budget"], scale=ctx["scale"])
             t0 = time.perf_counter()
             try:
                 resp = self.model.complete(messages, TOOL_SCHEMAS)
@@ -288,6 +288,7 @@ class Agent:
                 return Reply(text=f"Sorry, I couldn't reach the language model ({type(e).__name__}). "
                                   "Nothing was booked or changed.", kind="error")
             turns += 1
+            self.context.calibrate(ctx["request_tokens"], resp.usage.get("input_tokens", 0))
             self.tracer.event("model_call", turn=turns, latency_ms=round((time.perf_counter() - t0) * 1000, 1),
                               input_tokens=resp.usage.get("input_tokens", 0),
                               output_tokens=resp.usage.get("output_tokens", 0), cost_usd=resp.cost_usd,

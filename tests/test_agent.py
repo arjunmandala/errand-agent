@@ -342,3 +342,16 @@ def test_regression_claim_guard_allows_negative_statements(tmp_path):
                                         say("I have not booked or cancelled anything.")])
     assert agent.handle("did you book it?").text == "Nothing was booked yet. Shall I hold a slot?"
     assert agent.handle("and cancel?").text == "I have not booked or cancelled anything."
+
+
+def test_budget_self_calibrates_to_provider_reported_input_tokens(tmp_path):
+    """Live xAI calls reported ~1.9x the chars/4 estimate. After a call reports real usage, the builder scales
+    its estimates so the next request is capped against the provider's own count."""
+    big = ModelResponse(tool_calls=[ToolCall(id="c1", name="list_bookings", args={})],
+                        usage={"input_tokens": 7000, "output_tokens": 10})
+    agent, env, model = make(tmp_path, [big, say("ok")], budget=4000)
+    seed_conversation(agent.store, "s1", n=220)
+    agent.handle("hi")
+    ctxs = [e for e in agent.last_trace_events() if e["kind"] == "context"]
+    assert ctxs[1]["scale"] > 1.0
+    assert ctxs[1]["request_tokens"] * ctxs[1]["scale"] <= 4000 + 1
