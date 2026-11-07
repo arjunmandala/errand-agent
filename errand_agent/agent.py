@@ -32,10 +32,12 @@ NUDGE = ("[app] You described proposing or performing an action but did not call
 
 def claims_success(text: str, known_ids=()) -> bool:
     """True if any clause asserts a booking, cancellation or move. Outcome text is rendered by the app, so model
-    text is held to this: questions, sentences naming a booking already in the ledger, and claim words with a
+    text is held to this: a reply naming a booking already in the ledger, questions, and claim words with a
     negation or condition before them in the same clause are the only exceptions."""
+    if any(i in (text or "") for i in known_ids):
+        return False
     for sentence in re.split(r"(?<=[.!?\n])\s+", text or ""):
-        if sentence.rstrip().endswith("?") or any(i in sentence for i in known_ids):
+        if sentence.rstrip().endswith("?"):
             continue
         for clause in re.split(r"[,;:()]|\s[-–—]\s", sentence):
             for m in SUCCESS_CLAIM.finditer(clause):

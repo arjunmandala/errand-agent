@@ -643,3 +643,14 @@ def test_tick_without_a_known_area_asks_instead_of_guessing(tmp_path):
     notes = agent.tick()
     assert len(notes) == 1 and notes[0].kind == "notification" and "area" in notes[0].text
     assert not any(c[0] == "search_providers" for c in env.calls)
+
+
+def test_claim_guard_allows_a_reply_about_a_booking_in_the_ledger(tmp_path):
+    """The recorded live run answered a repeated yes with 'Already booked.' followed by the booking ID in the next
+    sentence; naming a ledger booking anywhere in the reply keeps it."""
+    agent, env, model = booking_flow(tmp_path)
+    agent.handle("plumber in HSR this week")
+    bid = agent.handle("yes").outcome["booking"]["booking_id"]
+    text = f"Already booked. HSR Pipes ({bid}), Tue 10 Nov, 10:00. Nothing else to confirm."
+    model.extend([say(text)])
+    assert agent.handle("yes").text == text
