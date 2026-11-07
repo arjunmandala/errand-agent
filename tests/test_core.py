@@ -125,6 +125,16 @@ def test_parse_decision(text, expected):
     assert parse_decision(text) == expected
 
 
+@pytest.mark.parametrize("text,action,expected", [
+    ("yes cancel it", "cancel", "confirm"), ("cancel", "cancel", "confirm"), ("yes move it", "reschedule", "confirm"),
+    ("book it", "book", "confirm"), ("no, don't cancel", "cancel", "reject"), ("cancel", "book", "reject"),
+    ("no", "cancel", "reject"), ("yes cancel it", "book", "other"), ("book it", "cancel", "other"),
+])
+def test_parse_decision_accepts_the_pending_action_verb(text, action, expected):
+    """Bug: the cancel prompt says 'Yes to cancel', but 'yes cancel it' parsed as other because cancel is a reject word."""
+    assert parse_decision(text, action) == expected
+
+
 def _approvals(tmp_path, clock=None):
     clock = clock or FakeClock(START)
     store = Store(tmp_path / "a.db")

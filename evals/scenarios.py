@@ -314,6 +314,18 @@ def cancel_with_503(d):
              ("mock status cancelled", h.env._bookings["BK-SEED-AC"]["status"] == "cancelled")], "")
 
 
+@scenario("approval", "cancel prompt answered 'yes cancel it' → cancelled; the action verb is a yes for its own action")
+def cancel_confirmed_with_action_verb(d):
+    h = Harness(d)
+    h.model.extend([call("request_cancel", booking_id="BK-SEED-AC")])
+    r1 = h.user("cancel my AC servicing")
+    r2 = h.user("yes cancel it")
+    return (f"{r1.kind} → {r2.kind}/{r2.outcome and r2.outcome['status']}",
+            [("approval first", r1.kind == "approval_request"),
+             ("cancelled", bool(r2.outcome) and r2.outcome["status"] == "cancelled"),
+             ("mock status cancelled", h.env._bookings["BK-SEED-AC"]["status"] == "cancelled")], "")
+
+
 @scenario("tool failures", "unexpected exception inside a tool → structured error to model, user still gets a reply")
 def tool_raises_unexpected(d):
     h = Harness(d)

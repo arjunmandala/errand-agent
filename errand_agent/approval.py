@@ -57,6 +57,8 @@ _REJECT = {
     "not",
     "never",
 }
+# The verb the approval prompt invites ("Yes to cancel", "Yes to move it") counts as a yes for that action only.
+_ACTION_VERBS = {"book": {"book"}, "cancel": {"cancel"}, "reschedule": {"move", "reschedule"}}
 _EMOTICON = re.compile(r"[:;][-']?[)dDpP(/\\|]+")
 
 
@@ -77,14 +79,16 @@ def canonical_digest(action: str, details: dict | None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def parse_decision(text: str | None) -> str:
+def parse_decision(text: str | None, action: str | None = None) -> str:
     """Classify a user reply as confirm, reject, or other.
 
     Deterministic token rules only — never a model. A confirm requires at least
     one confirm word, no reject words, and every token in the confirm/filler
     set. The idiom "go ahead" counts as a confirm signal. Reject is symmetric.
-    Anything else, including mixed or extra words, is other.
+    Anything else, including mixed or extra words, is other. With ``action``,
+    that action's verb is a confirm word unless the reply also has a reject word.
     """
+    verbs = _ACTION_VERBS.get(action or "", set())
     if not text:
         return "other"
     lowered = text.lower()
@@ -95,7 +99,9 @@ def parse_decision(text: str | None) -> str:
     if not tokens:
         return "other"
     confirm_hits = sum(1 for tok in tokens if tok in _CONFIRM)
-    reject_hits = sum(1 for tok in tokens if tok in _REJECT)
+    reject_hits = sum(1 for tok in tokens if tok in _REJECT and tok not in verbs)
+    if reject_hits == 0:
+        confirm_hits += sum(1 for tok in tokens if tok in verbs)
     has_go_ahead = any(
         tokens[i] == "go" and tokens[i + 1] == "ahead" for i in range(len(tokens) - 1)
     )
@@ -104,13 +110,13 @@ def parse_decision(text: str | None) -> str:
     if (
         confirm_hits >= 1
         and reject_hits == 0
-        and all(tok in _CONFIRM or tok in _FILLER for tok in tokens)
+        and all(tok in _CONFIRM or tok in _FILLER or tok in verbs for tok in tokens)
     ):
         return "confirm"
     if (
         reject_hits >= 1
         and confirm_hits == 0
-        and all(tok in _REJECT or tok in _FILLER for tok in tokens)
+        and all(tok in _REJECT or tok in _FILLER or tok in verbs for tok in tokens)
     ):
         return "reject"
     return "other"
@@ -166,7 +172,7 @@ class Approvals:
         if expires is not None and self.clock.now() > expires:
             self.store.update_approval(approval_id, status="expired")
             raise ApprovalError(f"approval {approval_id} has expired")
-        if parse_decision(user_text) != "confirm":
+        if parse_decision(user_text, approval["action"]) != "confirm":
             raise ApprovalError("user reply is not an unambiguous confirmation")
         updated = self.store.update_approval(approval_id, status="granted")
         if updated is None:
