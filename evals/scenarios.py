@@ -618,6 +618,7 @@ def proactive_past_and_no_replacement(d):
     h = Harness(d)
     h.env._bookings["BK-SEED-EL"]["status"] = "cancelled_by_provider"  # past booking
     quiet = h.agent.tick()
+    Memory(h.store, h.clock).remember("preferred_area", "HSR Layout")
     Memory(h.store, h.clock).remember("budget_max", "100", scope="ac_service")  # nothing that cheap
     h.env.provider_cancels("BK-SEED-AC")
     notes = h.agent.tick()
@@ -650,6 +651,7 @@ def proactive_cancellation_search_fails(d):
         raise RuntimeError("search backend down")
 
     h.env.search_providers = down
+    Memory(h.store, h.clock).remember("preferred_area", "HSR Layout")
     h.env.provider_cancels("BK-SEED-AC")
     notes = h.agent.tick()
     again = h.agent.tick()

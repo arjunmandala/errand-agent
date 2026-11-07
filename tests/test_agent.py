@@ -513,6 +513,7 @@ def test_regression_tick_tells_the_user_when_replacement_search_fails(tmp_path):
     """Bug: tick() let a search_providers exception escape into the CLI loop, so the user never heard about the
     provider's cancellation."""
     agent, env, model = make(tmp_path, [])
+    agent.handle("/remember preferred_area=Koramangala")
 
     def down(*a, **k):
         raise RuntimeError("search backend down")
@@ -528,6 +529,7 @@ def test_regression_tick_marks_a_cancellation_handled_only_after_telling_the_use
     """Bug: tick() stored the cancellation as handled before acting on it, so a run that died before the user was
     told never reported it again."""
     agent, env, model = make(tmp_path, [])
+    agent.handle("/remember preferred_area=Koramangala")
 
     class Crash(BaseException):
         pass
@@ -633,3 +635,11 @@ def test_regression_only_argument_binding_errors_are_bad_arguments(tmp_path):
     agent.handle("cancel my AC servicing")
     errors = [e["result"].get("error") for e in agent.last_trace_events() if e["kind"] == "tool_call"]
     assert errors == ["bad_arguments", "tool_failure"]
+
+
+def test_tick_without_a_known_area_asks_instead_of_guessing(tmp_path):
+    agent, env, model = make(tmp_path, [])
+    env.provider_cancels("BK-SEED-AC")
+    notes = agent.tick()
+    assert len(notes) == 1 and notes[0].kind == "notification" and "area" in notes[0].text
+    assert not any(c[0] == "search_providers" for c in env.calls)

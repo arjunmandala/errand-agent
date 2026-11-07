@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from errand_agent.clock import FakeClock
-from errand_agent.mocks.env import MockToolEnv, ScenarioConfig, ToolTimeout, ServiceUnavailable
+from errand_agent.mocks.env import DEFAULT_USER_ID, MockToolEnv, ScenarioConfig, ToolTimeout, ServiceUnavailable
 
 START = datetime(2026, 11, 10, 8, 0)
 WEEK = ["2026-11-10", "2026-11-14"]
@@ -80,7 +80,7 @@ def test_book_success_and_idempotent_on_same_key():
     r1 = env.book(h["hold_id"], "k1")
     r2 = env.book(h["hold_id"], "k1")
     assert r1["status"] == "confirmed" and r1 == r2
-    assert len([b for b in env.list_bookings("arjun")["bookings"] if b["status"] == "confirmed" and b["slot"] == slot]) == 1
+    assert len([b for b in env.list_bookings(DEFAULT_USER_ID)["bookings"] if b["status"] == "confirmed" and b["slot"] == slot]) == 1
 
 
 def test_book_slot_taken():
@@ -139,7 +139,7 @@ def test_reschedule_conflict_on_configured_slot_and_success_otherwise():
 
 def test_list_bookings_has_seeded_history_with_required_fields():
     env = make_env()
-    bs = env.list_bookings("arjun")["bookings"]
+    bs = env.list_bookings(DEFAULT_USER_ID)["bookings"]
     assert bs
     for b in bs:
         assert {"id", "provider_id", "provider_name", "service", "slot", "status"} <= set(b)
@@ -151,7 +151,7 @@ def test_provider_cancellation_event():
     p, slot = first_slot(env)
     b = env.book(env.hold_slot(p["id"], slot)["hold_id"], "k1")
     env.provider_cancels(b["booking_id"])
-    st = [x for x in env.list_bookings("arjun")["bookings"] if x["id"] == b["booking_id"]][0]
+    st = [x for x in env.list_bookings(DEFAULT_USER_ID)["bookings"] if x["id"] == b["booking_id"]][0]
     assert st["status"] == "cancelled_by_provider"
 
 
