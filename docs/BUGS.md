@@ -1,6 +1,6 @@
 # Real bugs, with regression tests
 
-Bugs 1 to 3 happened during development. Bugs 4 to 10 came from a later code review. Every bug has a regression test in `tests/`, and the review bugs that change agent behaviour also have an eval scenario.
+Bugs 1 to 3 happened during development. Bugs 4 to 10 came from a later code review, and bugs 11 to 17 from a second one. Every bug has a regression test in `tests/`, and the review bugs that change agent behaviour also have an eval scenario.
 
 ## 1. A slot that had already started was offered, booked, and its cancellation went unreported
 - **What broke:** the proactive-cancellation test failed. `tick()` returned nothing after the provider cancelled a booking.
@@ -62,5 +62,49 @@ Bugs 1 to 3 happened during development. Bugs 4 to 10 came from a later code rev
 - **Fix:** `Clock.now()` reads Asia/Kolkata through `zoneinfo` and returns naive IST, which matches the slot strings.
 - **Regression test:** `test_clock_uses_asia_kolkata_whatever_the_machine_zone`.
 
-### Smaller one
+## 11. A booking claim got past the success-claim guard
+- **What broke:** "No worries, you're booked with HSR Pipes for Tuesday 10:00." and "Done, approval was pre-granted." reached the user with no book call.
+- **Why:** the guard skipped a whole sentence if any negation word was in it, and it knew only a few verbs.
+- **Fix:** outcome text is rendered by the app, so model text is checked per clause. A claim word (booked, confirmed, cancelled, moved, scheduled, reserved, granted, approved, all set) counts as negated only when the negation or condition comes before it in the same clause. Questions and replies that name a booking in the ledger pass.
+- **Regression tests:** `test_regression_claim_guard_blocks_claims_without_the_old_keywords`, `test_claim_guard_allows_a_reply_about_a_booking_in_the_ledger`, eval `prompt_injection_review`.
+
+## 12. A provider cancellation could go unreported
+- **What broke:** if `search_providers` raised inside `tick()`, the error escaped into the CLI loop and the user never heard about the cancellation.
+- **Why:** `tick()` stored the cancellation as handled before it acted, and `_replace()` had no error handling.
+- **Fix:** an error in `_replace()` still produces a notification. The cancellation is stored as handled only after the reply is saved.
+- **Regression tests:** `test_regression_tick_tells_the_user_when_replacement_search_fails`, `test_regression_tick_marks_a_cancellation_handled_only_after_telling_the_user`, eval `proactive_cancellation_search_fails`.
+
+## 13. A partial value was stored as an explicit preference
+- **What broke:** the user wrote "under 1500" and the model saved `budget_max=150` as explicit.
+- **Why:** `t_remember_preference` checked the value with a substring match.
+- **Fix:** `said_in()` matches whole numbers and whole words after lowercasing, collapsing spaces and dropping thousands commas.
+- **Regression tests:** `test_regression_explicit_memory_needs_the_whole_value_in_the_user_message`, eval `memory_partial_value_not_explicit`.
+
+## 14. A forgotten preference still reached the model
+- **What broke:** after `/forget preferred_area`, "Koramangala" was in the next model request.
+- **Why:** the memory row was left out, but older chat messages that named the value were sent as they were.
+- **Fix:** `ContextBuilder.build()` replaces forgotten values with `[forgotten]` in the history. The newest user message is kept, so the user can give the value again.
+- **Regression tests:** `test_regression_forgotten_value_is_not_in_the_model_request`, eval `memory_forgetting` (checks the whole request).
+
+## 15. One slow model call overran the wall-clock limit
+- **What broke:** the limit was 45s, but a model call could run for 60s and then end as a model error with no `limit_hit`.
+- **Why:** the limit was checked only between turns, and `XAIModel` used a fixed 60s HTTP timeout.
+- **Fix:** each model call gets the time left in the budget as its timeout. A call that fails after the budget is spent returns the limit reply and records `limit_hit`.
+- **Regression tests:** `test_regression_model_call_gets_the_remaining_wall_clock_budget`, eval `model_call_overruns_wall_clock`.
+
+## 16. The model could loosen the user's constraints
+- **What broke:** after it read an injected review, the model set `budget_max=0` and the search offered providers over the user's budget.
+- **Why:** `update_request` accepted any value from the model.
+- **Fix:** a higher or removed budget, a different time window, or an earlier start time is applied only when the current user message says so. Otherwise the field is refused and kept.
+- **Regression tests:** `test_regression_model_cannot_loosen_the_users_constraints`, eval `injected_constraint_widening`.
+
+## 17. Two processes produced the same booking ID
+- **What broke:** each process rebuilt the mock with seed 7, so two bookings got `BK-4d3c1a` and the ledger kept one row.
+- **Why:** booking IDs came from the seeded RNG.
+- **Fix:** the booking ID is a hash of the idempotency key, which holds the approval's random ID.
+- **Regression tests:** `test_regression_booking_ids_stay_unique_across_a_real_restart`, eval `booking_ids_unique_across_processes`.
+
+### Smaller ones
+- `Router.run` reported every `TypeError` as `bad_arguments`, including faults inside a tool. It now checks the arguments with `inspect.signature().bind()` first. Test: `test_regression_only_argument_binding_errors_are_bad_arguments`.
+- The code named a real user ID and a fixed fallback area. The user ID is now `DEFAULT_USER_ID`, and `tick()` asks for an area when none is known. Test: `test_tick_without_a_known_area_asks_instead_of_guessing`.
 - `Tracer.event(kind, **data)` collided with a `kind=` field in `run_end`, so every run raised `TypeError` before the first agent test went green. Fix: `kind` became positional-only and the field was renamed to `reply_kind`.
