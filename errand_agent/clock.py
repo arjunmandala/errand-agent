@@ -2,11 +2,15 @@
 
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class Clock:
     def now(self) -> datetime:
-        return datetime.now()
+        # Naive Asia/Kolkata wall time: slots, holds and approvals are all naive IST strings.
+        return datetime.now(IST).replace(tzinfo=None)
 
     def sleep(self, seconds: float) -> None:
         time.sleep(seconds)
