@@ -434,3 +434,14 @@ def test_approval_copy_is_specific_and_not_a_form_letter(tmp_path):
     assert "yes" in text.lower() and "no" in text.lower()
     # hold expiry still visible as HH:MM
     assert d["hold_expires_at"][11:16] in text or d["hold_expires_at"][-5:] in text
+
+
+@pytest.mark.parametrize("slot", ["2026-11-09T10:00", "2026-11-10T07:00", "2026-11-14T09:00", "2026-11-14T10:30"])
+def test_regression_reschedule_rejects_past_and_off_hours_slots(tmp_path, slot):
+    """Bug: request_reschedule opened an approval for any slot, including one in the past or outside the
+    provider's working hours (ACS-01 works 08, 10, 14 and 16)."""
+    agent, env, model = make(tmp_path, [call("request_reschedule", booking_id="BK-SEED-AC", slot=slot),
+                                        say("That slot does not work.")])
+    r = agent.handle("move my AC servicing")
+    assert r.kind == "message" and agent.store.pending_approval("s1") is None
+    assert "invalid_slot" in model.calls[1][-1]["content"]

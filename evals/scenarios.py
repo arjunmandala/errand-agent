@@ -301,6 +301,20 @@ def reschedule_slot_conflict(d):
              ("moved to 14:00", h.env._bookings["BK-SEED-AC"]["slot"] == "2026-11-14T14:00")], "")
 
 
+@scenario("slot conflict", "reschedule to a past or off-hours slot → refused by the app; no approval opened")
+def reschedule_invalid_slot_refused(d):
+    h = Harness(d)
+    h.model.extend([call("request_reschedule", booking_id="BK-SEED-AC", slot="2026-11-09T10:00"),
+                    call("request_reschedule", booking_id="BK-SEED-AC", slot="2026-11-14T09:00"),
+                    say("Neither slot works for CoolAir. They work 8, 10, 14 and 16.")])
+    r = h.user("move my AC servicing to last Monday, or Saturday 9am")
+    errs = [e["result"].get("error") for e in h.events("tool_call") if e["name"] == "request_reschedule"]
+    return (f"errors={errs}; reply={r.kind}",
+            [("both slots refused", errs == ["invalid_slot", "invalid_slot"]),
+             ("no approval opened", h.store.pending_approval("eval") is None),
+             ("booking unchanged", h.env._bookings["BK-SEED-AC"]["slot"] == "2026-11-12T10:00")], "")
+
+
 @scenario("tool failures", "cancel: first call 503, retried with same key → cancelled; needs approval")
 def cancel_with_503(d):
     h = Harness(d)
