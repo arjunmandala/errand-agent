@@ -588,3 +588,25 @@ def test_regression_model_call_gets_the_remaining_wall_clock_budget(tmp_path):
     assert model.timeouts == [45, 25]
     assert r.kind == "limit"
     assert any(e["kind"] == "limit_hit" for e in agent.last_trace_events())
+
+
+def test_regression_model_cannot_loosen_the_users_constraints(tmp_path):
+    """Bug: after reading an injected review the model called update_request(budget_max=0) and search then offered
+    providers over the user's budget. Only the user's current message may loosen a stated constraint."""
+    agent, env, model = make(tmp_path, [
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK, budget_max=1000,
+             time_window="morning", earliest_time="10:00"),
+        say("Got it."),
+        call("update_request", budget_max=0, time_window="any", earliest_time="08:00"),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        say("Here are options."),
+        call("update_request", budget_max=2000, earliest_time="9:00"),
+        say("Updated."),
+    ])
+    agent.handle("plumber in HSR this week, mornings from 10, under 1000")
+    agent.handle("what do the reviews say?")
+    assert agent.workflow.request["budget_max"] == 1000 and agent.workflow.request["time_window"] == "morning"
+    assert agent.workflow.request["earliest_time"] == "10:00"
+    assert agent.workflow.candidates and all(c["price"] <= 1000 for c in agent.workflow.candidates)
+    agent.handle("ok, I can go up to 2,000 and start from 9 a.m.")
+    assert agent.workflow.request["budget_max"] == 2000 and agent.workflow.request["earliest_time"] == "09:00"
