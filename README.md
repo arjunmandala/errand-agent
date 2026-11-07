@@ -25,7 +25,7 @@ python3 -m venv .venv && .venv/bin/pip install pytest
 ```
 Try: `Find a plumber for my kitchen tap this week, mornings only, under 1500 in HSR Layout`, then `book the best rated one`, then `yes`. You can also run `Move my AC servicing to Saturday` or `/provider-cancel <booking id>` followed by `/tick`, and `/memory`, `/remember earliest_time=10:00`, `/forget earliest_time` or `/trace`.
 
-**LLM wiring.** `XAIModel` calls the xAI **Responses API** (`POST https://api.x.ai/v1/responses`) with function tools, `store=false` and low reasoning effort, on `grok-4.7` by default. It uses the same bearer token as the box's shared `grok-agent` CLI. `models.discover_token()` loads `/home/box/tools/grok-agent/grok_agent.py` and calls its `get_token()`, which returns the pi xAI login with auto-refresh. If that isn't available it falls back to `USER_BEARER_TOKEN`, then `/home/box/secrets/xai_bearer`. Elsewhere, set `XAI_API_KEY`. The token is never logged, and it is scrubbed from error bodies. Tests and evals never touch the network.
+**LLM wiring.** `XAIModel` calls the xAI **Responses API** (`POST https://api.x.ai/v1/responses`) with function tools, `store=false` and low reasoning effort, on `grok-4.7` by default. `models.discover_token()` uses `XAI_API_KEY` first when it is set. Otherwise it uses the same bearer token as the box's shared `grok-agent` CLI: it loads `/home/box/tools/grok-agent/grok_agent.py` and calls its `get_token()`, which returns the pi xAI login with auto-refresh. If that isn't available it falls back to `USER_BEARER_TOKEN`, then `/home/box/secrets/xai_bearer`. The token is never logged, and it is scrubbed from error bodies. Tests and evals never touch the network.
 
 ## Layout
 | Path | What |
