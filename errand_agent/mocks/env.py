@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -151,7 +152,8 @@ class MockToolEnv:
 
     def _create_booking(self, hold: dict, idempotency_key: str) -> dict:
         provider = PROVIDERS[hold["provider_id"]]
-        booking_id = self._hex_id("BK-")
+        # From the idempotency key, not the seeded RNG, so a restarted mock with the same seed cannot reuse an ID.
+        booking_id = "BK-" + hashlib.sha256(idempotency_key.encode()).hexdigest()[:10]
         booking = {
             "id": booking_id,
             "provider_id": hold["provider_id"],

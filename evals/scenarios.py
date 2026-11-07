@@ -467,6 +467,18 @@ def restart_reconciles_unverified_booking(d):
              ("second start is quiet", h2.agent.start() == [])], "")
 
 
+@scenario("restart mid-booking", "two processes, each with a fresh seed-7 mock, book over one database → two distinct booking IDs in the ledger")
+def booking_ids_unique_across_processes(d):
+    ids = []
+    for _ in range(2):
+        h = Harness(d, book_outcomes=["success"])
+        h.model.extend(h.search_and_request())
+        h.user("plumber in HSR this week")
+        ids.append(h.user("yes").outcome["booking"]["booking_id"])
+    return (f"ids={ids}; ledger rows={len(h.store.bookings())}",
+            [("distinct booking IDs", ids[0] != ids[1]), ("ledger keeps both", len(h.store.bookings()) == 2)], "")
+
+
 # ---------------------------------------------------------------- memory
 @scenario("memory correction", "corrected preference supersedes old; only new value reaches the model")
 def memory_correction(d):
