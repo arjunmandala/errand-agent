@@ -2,7 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from enum import Enum
+
+
+def normalize_time(value):
+    """'9', '9:00', '9am' or '10 a.m.' become 'HH:MM' so string comparison with slot times is safe.
+
+    Anything unparseable is returned unchanged.
+    """
+    m = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*([ap]m)?", str(value).strip().lower().replace(".", ""))
+    if not m:
+        return value
+    hour, minute = int(m[1]), int(m[2] or 0)
+    if m[3] == "pm" and hour < 12:
+        hour += 12
+    elif m[3] == "am" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return value
+    return f"{hour:02d}:{minute:02d}"
 
 
 class State(str, Enum):
@@ -75,7 +94,7 @@ class Workflow:
         """Set known request fields. Unknown keys and None values are ignored."""
         for name, value in fields.items():
             if name in self.REQUEST_FIELDS and value is not None:
-                self.request[name] = value
+                self.request[name] = normalize_time(value) if name == "earliest_time" else value
 
     def missing(self) -> list[str]:
         """Required field names that have not been set, in REQUIRED order."""
