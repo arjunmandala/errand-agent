@@ -394,6 +394,11 @@ class Agent:
                        "earliest_time": req.get("earliest_time") or self.memory.get("earliest_time", service),
                        "not_before": self.clock.now().strftime("%Y-%m-%dT%H:%M")}
         head = (f"Heads up: {b['provider_name']} cancelled your {service} booking on {fmt_slot(b['slot'])}. ")
+        if self.store.pending_approval(self.session_id):
+            # A replacement approval would supersede the one the user is still deciding on.
+            return Reply(text=head + "You still have a request waiting for your yes or no, so I left it as it is and "
+                                     "didn't look for a replacement. Ask me to find one when you're ready.",
+                         kind="notification")
         found = self.env.search_providers(service, area, date_range)
         self.tracer.event("provider_call", name="search_providers", args={"service": service, "area": area,
                           "date_range": date_range}, result={"count": len(found.get("providers", []))})
