@@ -56,8 +56,8 @@ class ScriptedModel:
 
 
 def discover_token() -> str:
-    """Same bearer the shared grok-agent CLI uses (pi xAI login → USER_BEARER_TOKEN → token file → USER_LLM_API_KEY),
-    or XAI_API_KEY. Never printed or logged."""
+    """XAI_API_KEY if set, else the bearer the shared grok-agent CLI uses (pi xAI login → USER_BEARER_TOKEN →
+    token file). Never printed or logged."""
     if os.environ.get("XAI_API_KEY"):
         return "".join(os.environ["XAI_API_KEY"].split())
     if os.path.isfile(GROK_AGENT_PATH):
