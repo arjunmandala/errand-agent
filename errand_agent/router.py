@@ -2,6 +2,7 @@
 an approval that only the user can grant. Returns (result_for_model, stop_reply_or_None)."""
 from __future__ import annotations
 
+import inspect
 import re
 import time
 from datetime import datetime
@@ -112,9 +113,13 @@ class Router:
             if name not in TOOL_NAMES:
                 result, stop = {"error": "unknown_tool", "allowed": TOOL_NAMES}, None
             else:
-                result, stop = getattr(self, "t_" + name)(**(args or {}))
-        except TypeError as e:
-            result, stop, err = {"error": "bad_arguments", "detail": str(e)}, None, str(e)
+                fn = getattr(self, "t_" + name)
+                try:
+                    inspect.signature(fn).bind(**(args or {}))
+                except TypeError as e:
+                    result, stop, err = {"error": "bad_arguments", "detail": str(e)}, None, str(e)
+                else:
+                    result, stop = fn(**(args or {}))
         except Exception as e:
             result, stop, err = {"error": "tool_failure", "detail": f"{type(e).__name__}"}, None, f"{type(e).__name__}: {e}"
         result = sanitize_tool_result(name, result)

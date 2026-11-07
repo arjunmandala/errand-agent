@@ -622,3 +622,14 @@ def test_regression_booking_ids_stay_unique_across_a_real_restart(tmp_path):
         ids.append(agent.handle("yes").outcome["booking"]["booking_id"])
     assert ids[0] != ids[1]
     assert len(agent.store.bookings()) == 2
+
+
+def test_regression_only_argument_binding_errors_are_bad_arguments(tmp_path):
+    """Bug: Router.run labelled every TypeError as bad_arguments, so a fault inside a tool told the model to fix
+    arguments that were correct."""
+    agent, env, model = make(tmp_path, [call("request_cancel", booking="BK-SEED-AC"),
+                                        call("request_cancel", booking_id="BK-SEED-AC"), say("ok")])
+    env.list_bookings = lambda user_id: {"bookings": None}
+    agent.handle("cancel my AC servicing")
+    errors = [e["result"].get("error") for e in agent.last_trace_events() if e["kind"] == "tool_call"]
+    assert errors == ["bad_arguments", "tool_failure"]
