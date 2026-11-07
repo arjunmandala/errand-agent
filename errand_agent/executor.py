@@ -161,20 +161,16 @@ class Executor:
 
     def _status_after_timeout(self, key: str) -> dict | None:
         """Query booking status, retrying transient unavailability. None if unknown."""
-        last_error = None
-        for i in range(self.max_attempts):
+        for _ in range(self.max_attempts):
             try:
                 return self._call(
                     "get_booking_status",
                     lambda key=key: self.env.get_booking_status(idempotency_key=key),
                     idempotency_key=key,
                 )
-            except ServiceUnavailable as exc:
-                last_error = exc
-                if i + 1 >= self.max_attempts:
-                    return None
+            except ServiceUnavailable:
                 continue
-        return None if last_error else None
+        return None
 
     def _rehold(self, approval: dict, details: dict, key: str, hold_id: str | None) -> dict | None:
         """Re-hold after expiry. None means the caller should retry book."""

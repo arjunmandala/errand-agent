@@ -72,9 +72,8 @@ def discover_token() -> str:
             pass
         except Exception:
             pass
-    for env in ("USER_BEARER_TOKEN",):
-        if os.environ.get(env):
-            return "".join(os.environ[env].split())
+    if os.environ.get("USER_BEARER_TOKEN"):
+        return "".join(os.environ["USER_BEARER_TOKEN"].split())
     if os.path.isfile(TOKEN_FILE):
         return "".join(open(TOKEN_FILE).read().split())
     raise ModelError("No xAI token found (pi xAI login, USER_BEARER_TOKEN, /home/box/secrets/xai_bearer or XAI_API_KEY).")
