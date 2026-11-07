@@ -477,3 +477,20 @@ def test_regression_earliest_time_without_leading_zero_keeps_slots(tmp_path):
     assert agent.workflow.request["earliest_time"] == "09:00"
     slots = [s for c in agent.workflow.candidates for s in c["slots"]]
     assert slots and all(s[11:16] >= "09:00" for s in slots)
+
+
+def test_regression_search_uses_remembered_area_and_budget(tmp_path):
+    """Bug: ask_user said area and budget_max were already known from memory, but search_providers still
+    refused with missing_fields because it read only the request."""
+    agent, env, model = make(tmp_path, [
+        call("update_request", service="plumber", date_range=WEEK, time_window="any"),
+        call("search_providers", service="plumber", date_range=WEEK),
+        say("Here are options."),
+    ])
+    agent.handle("/remember preferred_area=HSR Layout")
+    agent.handle("/remember plumber:budget_max=1000")
+    agent.handle("plumber this week, any time")
+    res = [e["result"] for e in agent.last_trace_events() if e["kind"] == "tool_call" and e["name"] == "search_providers"]
+    assert "providers" in res[0] and res[0]["providers"]
+    assert agent.workflow.request["area"] == "HSR Layout"
+    assert all(c["price"] <= 1000 for c in agent.workflow.candidates)
