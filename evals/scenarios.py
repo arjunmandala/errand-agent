@@ -468,6 +468,20 @@ def same_electrician_not_before_10(d):
              ("no slot before 10 offered", all(s[11:16] >= "10:00" for c in h.agent.workflow.candidates for s in c["slots"]))], "")
 
 
+@scenario("memory", "earliest time given as '9:00' is stored as 09:00; search keeps slots from 9 onwards")
+def earliest_time_without_leading_zero(d):
+    h = Harness(d)
+    h.model.extend([call("update_request", service="plumber", area="HSR Layout", date_range=WEEK,
+                         time_window="any", budget_max=0, earliest_time="9:00"),
+                    call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+                    say("Here are options from 9.")])
+    h.user("plumber in HSR this week, not before 9:00")
+    slots = [s for c in h.agent.workflow.candidates for s in c["slots"]]
+    return (f"earliest={h.agent.workflow.request.get('earliest_time')}; slots={len(slots)}",
+            [("stored as HH:MM", h.agent.workflow.request.get("earliest_time") == "09:00"),
+             ("slots offered", bool(slots)), ("none before 09:00", all(s[11:16] >= "09:00" for s in slots))], "")
+
+
 @scenario("context budget", "55+ memories and 220 prior messages: context ≤ budget; only active, explicit/confirmed facts")
 def context_budget(d):
     h = Harness(d, budget=2400)

@@ -461,3 +461,19 @@ def test_regression_tick_keeps_the_users_pending_approval(tmp_path):
     assert len([c for c in env.calls if c[0] == "hold_slot"]) == holds
     agent.handle("yes")
     assert len(booked(env)) == 1
+
+
+def test_regression_earliest_time_without_leading_zero_keeps_slots(tmp_path):
+    """Bug: earliest_time '9:00' was compared as a string, so '10:00' >= '9:00' was false and every slot was dropped."""
+    agent, env, model = make(tmp_path, [
+        call("update_request", service="plumber", area="HSR Layout", date_range=WEEK, time_window="any",
+             budget_max=0, earliest_time="9:00"),
+        call("search_providers", service="plumber", area="HSR Layout", date_range=WEEK),
+        say("Here are options from 9."),
+    ])
+    agent.handle("/remember earliest_time=9")
+    assert Memory(agent.store, agent.clock).get("earliest_time") == "09:00"
+    agent.handle("plumber in HSR this week, not before 9")
+    assert agent.workflow.request["earliest_time"] == "09:00"
+    slots = [s for c in agent.workflow.candidates for s in c["slots"]]
+    assert slots and all(s[11:16] >= "09:00" for s in slots)

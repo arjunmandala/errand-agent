@@ -1,6 +1,8 @@
 """Persistent user preferences: explicit vs inferred, correct (supersede) and forget."""
 from __future__ import annotations
 
+from errand_agent.workflow import normalize_time
+
 ACTIVE = "active"
 
 
@@ -23,6 +25,8 @@ class Memory:
         if kind not in ("explicit", "inferred"):
             raise ValueError(f"bad kind {kind}")
         confirmed = True if kind == "explicit" else bool(confirmed)
+        if key == "earliest_time":
+            value = normalize_time(value)
         now = self.clock.now().isoformat()
         self._db.execute(
             "UPDATE memories SET status='superseded', updated_at=? WHERE key=? AND scope=? AND status='active'",
