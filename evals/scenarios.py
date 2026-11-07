@@ -517,6 +517,24 @@ def context_budget(d):
              ("old history dropped, logged", ctx["dropped_messages"] > 0)], "")
 
 
+@scenario("memory", "remembered area and budget fill the search; ask_user and search agree on what is known")
+def search_uses_remembered_area_and_budget(d):
+    h = Harness(d)
+    h.model.extend([call("update_request", service="plumber", date_range=WEEK, time_window="any"),
+                    call("ask_user", question="Which area?", fields=["area", "budget_max"]),
+                    call("search_providers", service="plumber", date_range=WEEK),
+                    say("Here are options in HSR under 1000.")])
+    h.user("/remember preferred_area=HSR Layout")
+    h.user("/remember plumber:budget_max=1000")
+    h.user("plumber this week, any time")
+    asked = [e["result"].get("error") for e in h.events("tool_call") if e["name"] == "ask_user"]
+    res = [e["result"] for e in h.events("tool_call") if e["name"] == "search_providers"][0]
+    return (f"ask_user={asked}; search={res.get('error') or len(res.get('providers', []))}",
+            [("ask_user says known", asked == ["already_known"]),
+             ("search ran with remembered values", "providers" in res and bool(res["providers"])),
+             ("remembered budget applied", all(c["price"] <= 1000 for c in h.agent.workflow.candidates))], "")
+
+
 @scenario("context budget", "ask_user for an already-known field is rejected by the app (no re-asking)")
 def no_reasking_known_fields(d):
     h = Harness(d)

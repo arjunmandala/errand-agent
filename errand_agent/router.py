@@ -119,6 +119,8 @@ class Router:
     def t_search_providers(self, service=None, area=None, date_range=None):
         wf = self.a.workflow
         wf.update(service=service, area=area, date_range=date_range)
+        known = self._known()  # same remembered values ask_user treats as already known
+        wf.update(area=known.get("area"), budget_max=known.get("budget_max"))
         if wf.missing():
             return {"error": "missing_fields", "missing": wf.missing()}, None
         r = wf.request
