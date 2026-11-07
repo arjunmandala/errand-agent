@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 
 MEMORY_SHARE = 0.35
 SCRATCH_RESERVE = 0.25
@@ -63,6 +64,15 @@ class ContextBuilder:
         tokens = estimate_tokens(system)
         history_budget = int(self.context_budget * (1 - SCRATCH_RESERVE)) - tokens
         all_msgs = [m for m in self.store.recent_messages(session_id) if m["role"] in ("user", "assistant")]
+        # Forgotten values are cut from older history; the newest user message is kept, so the user can say one again.
+        # ponytail: whole-word match on the stored text only, so "1500" still leaks as "1,500".
+        forgotten = [re.compile(rf"(?<!\w){re.escape(m['value'])}(?!\w)", re.IGNORECASE)
+                     for m in self.memory.list(include_inactive=True) if m["status"] == "forgotten" and m["value"]]
+        last_user = max((i for i, m in enumerate(all_msgs) if m["role"] == "user"), default=-1)
+        for i, m in enumerate(all_msgs):
+            if i != last_user:
+                for pat in forgotten:
+                    m["content"] = pat.sub("[forgotten]", m["content"])
         kept: list[dict] = []
         for m in reversed(all_msgs):
             t = estimate_tokens(m["content"])

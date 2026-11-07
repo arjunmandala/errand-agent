@@ -554,3 +554,16 @@ def test_regression_explicit_memory_needs_the_whole_value_in_the_user_message(tm
     assert mem.list()[-1]["kind"] == "explicit"
     agent.handle("no pets, this is about my category of work")
     assert mem.list()[-1]["kind"] == "inferred"
+
+
+def test_regression_forgotten_value_is_not_in_the_model_request(tmp_path):
+    """Bug: /forget removed the memory row from the context, but the value still reached the model through the
+    chat history that mentioned it."""
+    agent, env, model = make(tmp_path, [say("Noted, Koramangala it is."), say("ok"), say("Sure, Koramangala.")])
+    agent.handle("/remember preferred_area=Koramangala")
+    agent.handle("I usually need help in Koramangala")
+    agent.handle("/forget preferred_area")
+    agent.handle("hello")
+    assert "koramangala" not in json.dumps(model.calls[-1]).lower()
+    agent.handle("actually find me a plumber in Koramangala")  # said again: the newest message is kept
+    assert "Koramangala" in model.calls[-1][-1]["content"]

@@ -2,6 +2,8 @@
 Checks assert outcomes and invariants on the mock provider service, the DB and the trace, not reply wording."""
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from typing import Callable
 
@@ -478,7 +480,9 @@ def memory_forgetting(d):
     ctx = h.events("context")[-1]
     return (f"pets={pets['status']}, area kept={still}",
             [("unrequested forget refused", still == "HSR Layout"), ("pets forgotten", pets["status"] == "forgotten"),
-             ("forgotten fact not in context", pets["id"] not in ctx["memory_ids"])], "")
+             ("forgotten fact not in context", pets["id"] not in ctx["memory_ids"]),
+             ("forgotten value absent from the whole model request",
+              not re.search(r"\bcat\b", json.dumps(h.model.calls[-1]), re.IGNORECASE))], "")
 
 
 @scenario("memory", "earliest-time preference applied: 'same electrician as last time, not before 10'")
