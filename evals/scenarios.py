@@ -661,6 +661,25 @@ def wall_clock_limit(d):
     return (f"{r.kind} after {len(h.model.calls)} calls", [("limit reply", r.kind == "limit"), ("≤2 model calls", len(h.model.calls) <= 2)], "")
 
 
+@scenario("limit exhaustion", "model call hangs past the wall clock → call gets only the remaining budget; limit reply")
+def model_call_overruns_wall_clock(d):
+    h = Harness(d, limits=Limits(wall_clock_s=45))
+
+    def slow(m, t):
+        h.clock.advance(20)
+        return call("list_bookings")
+
+    def hangs(m, t):
+        h.clock.advance(25)
+        raise TimeoutError("read timed out")
+
+    h.model.extend([slow, hangs])
+    r = h.user("hi")
+    return (f"{r.kind}; timeouts={h.model.timeouts}",
+            [("limit reply", r.kind == "limit"), ("limit_hit traced", bool(h.events("limit_hit"))),
+             ("second call got the remaining 25s", h.model.timeouts == [45, 25])], "")
+
+
 @scenario("tool failures", "model/API error → user-facing error, nothing changed")
 def model_error(d):
     h = Harness(d)

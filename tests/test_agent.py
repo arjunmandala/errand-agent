@@ -567,3 +567,24 @@ def test_regression_forgotten_value_is_not_in_the_model_request(tmp_path):
     assert "koramangala" not in json.dumps(model.calls[-1]).lower()
     agent.handle("actually find me a plumber in Koramangala")  # said again: the newest message is kept
     assert "Koramangala" in model.calls[-1][-1]["content"]
+
+
+def test_regression_model_call_gets_the_remaining_wall_clock_budget(tmp_path):
+    """Bug: the wall-clock limit was checked only between turns and the HTTP timeout was a fixed 60s against a 45s
+    limit, so one slow call overran the budget and ended as a model error with no limit_hit."""
+    clock = FakeClock(START)
+    env = MockToolEnv(seed=7, clock=clock)
+
+    def slow_then_tool(m, t):
+        clock.advance(20)
+        return call("list_bookings")
+
+    def times_out(m, t):
+        clock.advance(25)
+        raise TimeoutError("read timed out")
+
+    agent, env, model = make(tmp_path, [slow_then_tool, times_out], env=env, limits=Limits(wall_clock_s=45))
+    r = agent.handle("hi")
+    assert model.timeouts == [45, 25]
+    assert r.kind == "limit"
+    assert any(e["kind"] == "limit_hit" for e in agent.last_trace_events())

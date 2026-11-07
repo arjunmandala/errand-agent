@@ -295,10 +295,12 @@ class Agent:
                               budget=ctx["budget"], scale=ctx["scale"])
             t0 = time.perf_counter()
             try:
-                resp = self.model.complete(messages, TOOL_SCHEMAS)
+                resp = self.model.complete(messages, TOOL_SCHEMAS, timeout=self.limits.wall_clock_s - elapsed)
             except Exception as e:
                 self.tracer.event("model_call", turn=turns, error=str(e), latency_ms=round((time.perf_counter() - t0) * 1000, 1),
                                   input_tokens=0, output_tokens=0, cost_usd=0.0)
+                if (self.clock.now() - started).total_seconds() >= self.limits.wall_clock_s:
+                    return self._limit(f"{int(self.limits.wall_clock_s)}s wall clock")
                 return Reply(text=f"I couldn't reach the language model ({type(e).__name__}). "
                                   "Nothing was booked or changed.", kind="error")
             turns += 1

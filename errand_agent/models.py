@@ -40,12 +40,14 @@ class ScriptedModel:
     def __init__(self, script=None) -> None:
         self.script = list(script or [])
         self.calls: list[list[dict]] = []
+        self.timeouts: list[float | None] = []
 
     def extend(self, steps) -> None:
         self.script.extend(steps)
 
-    def complete(self, messages, tools) -> ModelResponse:
+    def complete(self, messages, tools, timeout: float | None = None) -> ModelResponse:
         self.calls.append(copy.deepcopy(messages))
+        self.timeouts.append(timeout)
         if not self.script:
             return ModelResponse(text="(scripted model has no more steps)")
         step = self.script.pop(0)
@@ -112,7 +114,7 @@ class XAIModel:
         self.reasoning_effort = reasoning_effort
         self._token = discover_token()
 
-    def complete(self, messages, tools) -> ModelResponse:
+    def complete(self, messages, tools, timeout: float | None = None) -> ModelResponse:
         payload = {"model": self.name, "input": to_responses_input(messages),
                    "tools": to_responses_tools(tools), "store": False}
         if self.reasoning_effort:
@@ -121,7 +123,7 @@ class XAIModel:
                                      headers={"Content-Type": "application/json",
                                               "Authorization": "Bearer " + self._token})
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            with urllib.request.urlopen(req, timeout=self.timeout if timeout is None else timeout) as r:
                 resp = json.loads(r.read().decode())
         except urllib.error.HTTPError as e:
             body = e.read().decode(errors="replace").replace(self._token, "[REDACTED]")
