@@ -596,6 +596,23 @@ def proactive_cancellation_keeps_pending_approval(d):
              ("user's yes still books their choice", len(h.confirmed()) == 1)], "")
 
 
+@scenario("proactive cancellation", "replacement search raises during tick → user still told about the cancellation; told once")
+def proactive_cancellation_search_fails(d):
+    h = Harness(d)
+
+    def down(*a, **k):
+        raise RuntimeError("search backend down")
+
+    h.env.search_providers = down
+    h.env.provider_cancels("BK-SEED-AC")
+    notes = h.agent.tick()
+    again = h.agent.tick()
+    return (f"notes={[n.kind for n in notes]}; second tick={len(again)}",
+            [("user told about the cancellation", [n.kind for n in notes] == ["notification"]
+              and "cancelled" in notes[0].text),
+             ("nothing held", not h.calls("hold_slot")), ("second tick is quiet", again == [])], "")
+
+
 # ---------------------------------------------------------------- limits
 @scenario("limit exhaustion", "model loops on tools → stops at tool-call limit with a clear message")
 def tool_call_limit(d):

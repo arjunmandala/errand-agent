@@ -377,17 +377,24 @@ class Agent:
         self.run_outcomes = []
         replies = []
         for b in new:
-            handled.add(b["id"])
-            self.kv_set("handled_provider_cancellations", sorted(handled))
             self.tracer.event("provider_cancellation_detected", booking=b)
             if b["slot"] <= self.clock.now().strftime("%Y-%m-%dT%H:%M"):
                 self.tracer.event("notify_decision", booking_id=b["id"], notify=False, reason="slot in the past")
-                continue
-            self.tracer.event("notify_decision", booking_id=b["id"], notify=True, reason="upcoming booking")
-            replies.append(self._finish(self._replace(b)))
+            else:
+                self.tracer.event("notify_decision", booking_id=b["id"], notify=True, reason="upcoming booking")
+                head = f"Heads up: {b['provider_name']} cancelled your {b['service']} booking on {fmt_slot(b['slot'])}. "
+                try:
+                    reply = self._replace(b, head)
+                except Exception as e:
+                    self.tracer.event("error", error=f"{type(e).__name__}: {e}")
+                    reply = Reply(text=head + "I couldn't look for a replacement just now. Ask me to find one when "
+                                              "you're ready.", kind="notification")
+                replies.append(self._finish(reply))
+            handled.add(b["id"])
+            self.kv_set("handled_provider_cancellations", sorted(handled))
         return replies
 
-    def _replace(self, b: dict) -> Reply:
+    def _replace(self, b: dict, head: str) -> Reply:
         ledger = {x["booking_id"]: x for x in self.store.bookings()}.get(b["id"], {})
         service = b["service"]
         req = self.workflow.request if self.workflow.request.get("service") == service else {}
@@ -398,7 +405,6 @@ class Agent:
         constraints = {"budget_max": int(budget) if budget else None, "time_window": req.get("time_window"),
                        "earliest_time": req.get("earliest_time") or self.memory.get("earliest_time", service),
                        "not_before": self.clock.now().strftime("%Y-%m-%dT%H:%M")}
-        head = (f"Heads up: {b['provider_name']} cancelled your {service} booking on {fmt_slot(b['slot'])}. ")
         if self.store.pending_approval(self.session_id):
             # A replacement approval would supersede the one the user is still deciding on.
             return Reply(text=head + "You still have a request waiting for your yes or no, so I left it as it is and "

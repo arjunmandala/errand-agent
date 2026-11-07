@@ -507,3 +507,35 @@ def test_regression_claim_guard_blocks_claims_without_the_old_keywords(tmp_path)
         assert any(e["kind"] == "blocked_claim" for e in agent.last_trace_events()), r.text
         assert r.text == SAFE_NO_CLAIM
     assert not any(c[0] in ("book", "reschedule") for c in env.calls)
+
+
+def test_regression_tick_tells_the_user_when_replacement_search_fails(tmp_path):
+    """Bug: tick() let a search_providers exception escape into the CLI loop, so the user never heard about the
+    provider's cancellation."""
+    agent, env, model = make(tmp_path, [])
+
+    def down(*a, **k):
+        raise RuntimeError("search backend down")
+
+    env.search_providers = down
+    env.provider_cancels("BK-SEED-AC")
+    notes = agent.tick()
+    assert len(notes) == 1 and notes[0].kind == "notification" and "cancelled" in notes[0].text
+    assert agent.tick() == []
+
+
+def test_regression_tick_marks_a_cancellation_handled_only_after_telling_the_user(tmp_path):
+    """Bug: tick() stored the cancellation as handled before acting on it, so a run that died before the user was
+    told never reported it again."""
+    agent, env, model = make(tmp_path, [])
+
+    class Crash(BaseException):
+        pass
+
+    real, env.search_providers = env.search_providers, lambda *a, **k: (_ for _ in ()).throw(Crash())
+    env.provider_cancels("BK-SEED-AC")
+    with pytest.raises(Crash):
+        agent.tick()
+    env.search_providers = real
+    notes = agent.tick()
+    assert len(notes) == 1 and "cancelled" in notes[0].text
