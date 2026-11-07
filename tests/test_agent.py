@@ -445,3 +445,19 @@ def test_regression_reschedule_rejects_past_and_off_hours_slots(tmp_path, slot):
     r = agent.handle("move my AC servicing")
     assert r.kind == "message" and agent.store.pending_approval("s1") is None
     assert "invalid_slot" in model.calls[1][-1]["content"]
+
+
+def test_regression_tick_keeps_the_users_pending_approval(tmp_path):
+    """Bug: a provider cancellation found by tick() opened a replacement approval, which silently superseded the
+    approval the user was still deciding on."""
+    agent, env, model = booking_flow(tmp_path)
+    agent.handle("plumber in HSR this week")
+    pending = agent.store.pending_approval("s1")
+    holds = len([c for c in env.calls if c[0] == "hold_slot"])
+    env.provider_cancels("BK-SEED-AC")
+    notes = agent.tick()
+    assert len(notes) == 1 and notes[0].kind == "notification" and "cancelled" in notes[0].text
+    assert agent.store.get_approval(pending["id"])["status"] == "pending"
+    assert len([c for c in env.calls if c[0] == "hold_slot"]) == holds
+    agent.handle("yes")
+    assert len(booked(env)) == 1

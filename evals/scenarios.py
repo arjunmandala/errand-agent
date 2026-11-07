@@ -531,6 +531,22 @@ def proactive_past_and_no_replacement(d):
              ("no replacement → notification, no approval", notes[0].kind == "notification" and not h.calls("hold_slot"))], "")
 
 
+@scenario("proactive cancellation", "provider cancels while the user has an approval open → user told; their approval stays pending")
+def proactive_cancellation_keeps_pending_approval(d):
+    h = Harness(d, book_outcomes=["success"])
+    h.model.extend(h.search_and_request())
+    h.user("plumber in HSR this week")
+    pending = h.store.pending_approval("eval")
+    h.env.provider_cancels("BK-SEED-AC")
+    notes = h.agent.tick()
+    still = h.store.get_approval(pending["id"])["status"]
+    h.user("yes")
+    return (f"notes={[n.kind for n in notes]}; approval={still}; bookings={len(h.confirmed())}",
+            [("user told about the cancellation", [n.kind for n in notes] == ["notification"]),
+             ("pending approval not superseded", still == "pending"),
+             ("user's yes still books their choice", len(h.confirmed()) == 1)], "")
+
+
 # ---------------------------------------------------------------- limits
 @scenario("limit exhaustion", "model loops on tools → stops at tool-call limit with a clear message")
 def tool_call_limit(d):
