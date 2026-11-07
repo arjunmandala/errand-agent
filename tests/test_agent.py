@@ -610,3 +610,15 @@ def test_regression_model_cannot_loosen_the_users_constraints(tmp_path):
     assert agent.workflow.candidates and all(c["price"] <= 1000 for c in agent.workflow.candidates)
     agent.handle("ok, I can go up to 2,000 and start from 9 a.m.")
     assert agent.workflow.request["budget_max"] == 2000 and agent.workflow.request["earliest_time"] == "09:00"
+
+
+def test_regression_booking_ids_stay_unique_across_a_real_restart(tmp_path):
+    """Bug: each process rebuilt the mock with seed 7, so two processes produced the same booking ID and the
+    ledger kept one row for two bookings."""
+    ids = []
+    for _ in range(2):  # two processes: a fresh mock and Agent each time, one database
+        agent, env, model = booking_flow(tmp_path)
+        agent.handle("plumber in HSR this week")
+        ids.append(agent.handle("yes").outcome["booking"]["booking_id"])
+    assert ids[0] != ids[1]
+    assert len(agent.store.bookings()) == 2
