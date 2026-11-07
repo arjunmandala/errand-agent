@@ -13,7 +13,7 @@ A chat-based agent for home-service errands like plumbers, electricians, AC serv
 Needs Python 3.11+ and only the standard library at runtime. Tests use pytest.
 ```bash
 python3 -m venv .venv && .venv/bin/pip install pytest
-.venv/bin/pytest -q              # unit + agent + all eval scenarios, offline (scripted model, no network)
+.venv/bin/pytest -q              # 163 tests: unit, agent and all 47 eval scenarios, offline (scripted model, no network)
 .venv/bin/python -m evals.run    # rerun the evals and rewrite evals/results/eval_results.md + eval_table.csv
 ```
 
@@ -39,7 +39,7 @@ Try: `Find a plumber for my kitchen tap this week, mornings only, under 1500 in 
 | `memory.py`, `memory_seed.py`, `context.py` | Explicit/inferred memory with correct and forget, whole-request token budget |
 | `sanitize.py`, `trace.py` | Untrusted text wrapping and injection neutralising, PII redaction, JSONL traces |
 | `models.py` | `ScriptedModel` (offline) and `XAIModel` (live) |
-| `evals/` | 42 scenarios with simulated users, global invariants and the table generator |
+| `evals/` | 47 scenarios with simulated users, global invariants and the table generator |
 
 ## Known limitations
 - The token estimate is chars/4, calibrated against the usage the provider reports in each session. It is not a real tokenizer.
