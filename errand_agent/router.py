@@ -3,6 +3,7 @@ an approval that only the user can grant. Returns (result_for_model, stop_reply_
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 from errand_agent.sanitize import redact, sanitize_tool_result
 from errand_agent.tools import TOOL_NAMES
@@ -173,6 +174,15 @@ class Router:
         b = self._own_booking(booking_id)
         if not b or b["status"] != "confirmed":
             return {"error": "not_reschedulable", "detail": "no confirmed booking with that id"}, None
+        hours = self.call_env("get_provider", provider_id=b["provider_id"]).get("hours") or []
+        try:
+            when = datetime.fromisoformat(slot)
+        except (TypeError, ValueError):
+            when = None
+        now = self.a.clock.now().strftime("%Y-%m-%dT%H:%M")
+        if when is None or when.strftime("%Y-%m-%dT%H:%M") != slot or slot <= now or when.minute or when.hour not in hours:
+            return {"error": "invalid_slot", "detail": "slot must be a future YYYY-MM-DDTHH:00 within the provider's "
+                    "working hours", "provider_hours": hours, "not_before": now}, None
         return self._open_approval("reschedule", {"booking_id": booking_id, "provider_id": b["provider_id"],
                                                   "provider_name": b["provider_name"], "service": b["service"],
                                                   "old_slot": b["slot"], "slot": slot})
