@@ -399,3 +399,19 @@ def test_reschedule_conflict_then_success_requires_new_approval(tmp_path):
     ap.grant(a2["id"], "yes")
     assert ex.reschedule(a2["id"])["status"] == "confirmed"
     assert env._bookings[b["booking_id"]]["slot"] == "2026-11-14T11:00"
+
+
+def test_clock_uses_asia_kolkata_whatever_the_machine_zone(monkeypatch):
+    """Bug: Clock.now() returned the machine's local time while the prompt and slots are Asia/Kolkata."""
+    import time
+    from datetime import timedelta, timezone
+
+    from errand_agent.clock import Clock
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        ist = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=5, minutes=30)
+        assert abs((Clock().now() - ist).total_seconds()) < 60
+    finally:
+        monkeypatch.undo()
+        time.tzset()
