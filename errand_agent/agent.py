@@ -18,8 +18,10 @@ from errand_agent.tools import SYSTEM_PROMPT, TOOL_SCHEMAS
 from errand_agent.trace import Tracer
 from errand_agent.workflow import TRANSITIONS, State, Workflow
 
-SUCCESS_CLAIM = re.compile(r"\b(booked|confirmed|cancelled|canceled|rescheduled|all set)\b", re.IGNORECASE)
-NEGATION = re.compile(r"\b(not|nothing|no|never|yet to|haven't|hasn't|wasn't|isn't|didn't|won't|before)\b|n't\b", re.IGNORECASE)
+SUCCESS_CLAIM = re.compile(r"\b(booked|confirmed|cancell?ed|rescheduled|scheduled|moved|reserved|all set|"
+                           r"granted|approved)\b", re.IGNORECASE)
+# A claim word counts as negated or conditional only when one of these comes before it in the same clause.
+NEGATION = re.compile(r"\b(not|nothing|no|never|yet to|before|if|once|until|after|when)\b|n't\b", re.IGNORECASE)
 NARRATED_ACTION = re.compile(r"\b(proposing|i'll book|i will book|booking (?:it|this|that) now|i'?ve held|holding (?:the|a|this)|"
                              r"the app will (?:show|ask)|sending (?:it|this) for (?:your )?(?:confirmation|approval))\b", re.IGNORECASE)
 NUDGE = ("[app] You described proposing or performing an action but did not call request_booking / request_cancel / "
@@ -27,13 +29,20 @@ NUDGE = ("[app] You described proposing or performing an action but did not call
          "the user a question. Do not describe actions you have not taken.")
 
 
-def claims_success(text: str) -> bool:
-    """True if any sentence asserts a booking/cancellation happened (negated sentences don't count)."""
+def claims_success(text: str, known_ids=()) -> bool:
+    """True if any clause asserts a booking, cancellation or move. Outcome text is rendered by the app, so model
+    text is held to this: questions, sentences naming a booking already in the ledger, and claim words with a
+    negation or condition before them in the same clause are the only exceptions."""
     for sentence in re.split(r"(?<=[.!?\n])\s+", text or ""):
-        if SUCCESS_CLAIM.search(sentence) and not NEGATION.search(sentence):
-            return True
+        if sentence.rstrip().endswith("?") or any(i in sentence for i in known_ids):
+            continue
+        for clause in re.split(r"[,;:()]|\s[-–—]\s", sentence):
+            for m in SUCCESS_CLAIM.finditer(clause):
+                if not NEGATION.search(clause[:m.start()]):
+                    return True
     return False
-SAFE_NO_CLAIM = "Nothing has been reserved or changed yet; I only report a booking after the booking service confirms it. Want me to look for options?"
+SAFE_NO_CLAIM = ("I only report a booking, cancellation or move after the booking service confirms it, and nothing "
+                 "was confirmed just now. Want me to look for options?")
 
 
 @dataclass
@@ -319,15 +328,11 @@ class Agent:
 
     def _guarded_text(self, text: str) -> Reply:
         verified = any(o.get("status") in ("confirmed", "cancelled") for o in self.run_outcomes)
-        if claims_success(text) and not verified and not self._claim_is_historical(text):
+        ledger_ids = [b["booking_id"] for b in self.store.bookings() if b.get("booking_id")]
+        if not verified and claims_success(text, ledger_ids):
             self.tracer.event("blocked_claim", text=text)
             return Reply(text=SAFE_NO_CLAIM, kind="message")
         return Reply(text=text or "(no reply)", kind="message")
-
-    def _claim_is_historical(self, text: str) -> bool:
-        """Allow mentioning a booking that the ledger already has as confirmed (e.g. 'already booked BK-..')."""
-        ids = {b.get("booking_id") for b in self.store.bookings()}
-        return any(i and i in text for i in ids)
 
     # ------------------------------------------------------------------ slash commands
     def _command(self, cmd: str) -> Reply:

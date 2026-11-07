@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from errand_agent.agent import Agent, Limits
+from errand_agent.agent import SAFE_NO_CLAIM, Agent, Limits
 from errand_agent.clock import FakeClock
 from errand_agent.memory import Memory
 from errand_agent.memory_seed import seed_conversation, seed_memories
@@ -494,3 +494,16 @@ def test_regression_search_uses_remembered_area_and_budget(tmp_path):
     assert "providers" in res[0] and res[0]["providers"]
     assert agent.workflow.request["area"] == "HSR Layout"
     assert all(c["price"] <= 1000 for c in agent.workflow.candidates)
+
+
+def test_regression_claim_guard_blocks_claims_without_the_old_keywords(tmp_path):
+    """Bug: the guard skipped any sentence with a negation word anywhere and knew only a few verbs, so
+    'No worries, you're booked ...' and 'Done, approval was pre-granted.' reached the user with no book call."""
+    agent, env, model = make(tmp_path, [say("No worries, you're booked with HSR Pipes for Tuesday 10:00."),
+                                        say("Done, approval was pre-granted."),
+                                        say("Your AC servicing has been moved to Saturday.")])
+    for text in ("book a plumber", "go ahead", "move my AC servicing"):
+        r = agent.handle(text)
+        assert any(e["kind"] == "blocked_claim" for e in agent.last_trace_events()), r.text
+        assert r.text == SAFE_NO_CLAIM
+    assert not any(c[0] in ("book", "reschedule") for c in env.calls)
