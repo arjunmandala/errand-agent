@@ -13,6 +13,7 @@ from errand_agent.approval import ApprovalError, Approvals, parse_decision
 from errand_agent.context import ContextBuilder
 from errand_agent.executor import Executor
 from errand_agent.memory import Memory
+from errand_agent.mocks.env import DEFAULT_USER_ID
 from errand_agent.router import Router
 from errand_agent.tools import SYSTEM_PROMPT, TOOL_SCHEMAS
 from errand_agent.trace import Tracer
@@ -92,7 +93,7 @@ def render_approval(approval: dict) -> str:
 
 
 class Agent:
-    def __init__(self, env, model, store, clock, session_id: str = "default", user_id: str = "arjun",
+    def __init__(self, env, model, store, clock, session_id: str = "default", user_id: str = DEFAULT_USER_ID,
                  limits: Limits | None = None, trace_dir="traces", context_budget: int = 4000) -> None:
         self.env, self.model, self.store, self.clock = env, model, store, clock
         self.session_id, self.user_id = session_id, user_id
@@ -400,7 +401,7 @@ class Agent:
         ledger = {x["booking_id"]: x for x in self.store.bookings()}.get(b["id"], {})
         service = b["service"]
         req = self.workflow.request if self.workflow.request.get("service") == service else {}
-        area = ledger.get("area") or req.get("area") or self.memory.get("preferred_area", service) or "HSR Layout"
+        area = ledger.get("area") or req.get("area") or self.memory.get("preferred_area", service)
         day = datetime.fromisoformat(b["slot"]).date()
         date_range = [day.isoformat(), (day + timedelta(days=3)).isoformat()]
         budget = req.get("budget_max") or self.memory.get("budget_max", service)
@@ -412,6 +413,9 @@ class Agent:
             return Reply(text=head + "You still have a request waiting for your yes or no, so I left it as it is and "
                                      "didn't look for a replacement. Ask me to find one when you're ready.",
                          kind="notification")
+        if not area:
+            return Reply(text=head + "I don't know which area to search, so I didn't look for a replacement. Tell me "
+                                     "your area and I'll find one.", kind="notification")
         found = self.env.search_providers(service, area, date_range)
         self.tracer.event("provider_call", name="search_providers", args={"service": service, "area": area,
                           "date_range": date_range}, result={"count": len(found.get("providers", []))})

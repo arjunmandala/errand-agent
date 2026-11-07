@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from errand_agent.approval import Approvals
-from errand_agent.mocks.env import ServiceUnavailable, ToolTimeout
+from errand_agent.mocks.env import DEFAULT_USER_ID, ServiceUnavailable, ToolTimeout
 from errand_agent.store import Store
 
 
@@ -60,7 +60,7 @@ class Executor:
 
     def _user_id(self) -> str:
         config = getattr(self.env, "config", None)
-        return getattr(config, "user_id", None) or "arjun"
+        return getattr(config, "user_id", None) or DEFAULT_USER_ID
 
     def book(self, approval_id: str) -> dict:
         """Book a held slot. Never calls the tool without a matching grant."""

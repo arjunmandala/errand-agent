@@ -11,6 +11,9 @@ from errand_agent.clock import Clock
 from errand_agent.mocks.data import PROVIDERS, providers_for
 
 
+DEFAULT_USER_ID = "demo-user"
+
+
 class ToolTimeout(Exception):
     """Tool call timed out. The side effect may or may not have landed."""
 
@@ -32,7 +35,7 @@ class ScenarioConfig:
     reschedule_conflict_slots: set = field(default_factory=set)
     cancel_fail_first: bool = True
     status_unavailable: bool = False
-    user_id: str = "arjun"
+    user_id: str = DEFAULT_USER_ID
 
 
 class MockToolEnv:
@@ -67,7 +70,7 @@ class MockToolEnv:
                 "slot": "2026-10-20T10:00",
                 "status": "completed",
                 "price": PROVIDERS["ELE-03"]["price"],
-                "user_id": "arjun",
+                "user_id": DEFAULT_USER_ID,
             },
             {
                 "id": "BK-SEED-PL",
@@ -75,7 +78,7 @@ class MockToolEnv:
                 "slot": "2026-10-18T08:00",
                 "status": "completed",
                 "price": PROVIDERS["PLB-01"]["price"],
-                "user_id": "arjun",
+                "user_id": DEFAULT_USER_ID,
             },
             {
                 "id": "BK-SEED-AC",
@@ -83,7 +86,7 @@ class MockToolEnv:
                 "slot": "2026-11-12T10:00",
                 "status": "confirmed",
                 "price": PROVIDERS["ACS-01"]["price"],
-                "user_id": "arjun",
+                "user_id": DEFAULT_USER_ID,
             },
         ]
         for raw in seeds:
