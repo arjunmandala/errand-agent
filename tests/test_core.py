@@ -336,6 +336,22 @@ def test_restart_before_side_effect_landed_does_not_auto_book(tmp_path):
     assert confirmed_count(env) == 0
 
 
+def test_restart_reconciles_unknown_operation_via_status(tmp_path):
+    """Bug: recover() only looked at pending ops, so a book left unknown (timeout + status down) was never resolved."""
+    env, store, ap, ex, d = _setup(tmp_path, book_outcomes=["timeout_booked"], status_unavailable=True)
+    a = _granted(ap, d)
+    out = ex.book(a["id"])
+    assert store.get_operation(out["idempotency_key"])["status"] == "unknown"
+    env.config.status_unavailable = False
+    store2 = Store(tmp_path / "a.db")
+    ex2 = Executor(env, store2, Approvals(store2, env.clock), env.clock)
+    outs = ex2.recover()
+    assert [o["status"] for o in outs] == ["confirmed"]
+    assert store2.get_operation(out["idempotency_key"])["status"] == "confirmed"
+    assert [b["booking_id"] for b in store2.bookings()] == [outs[0]["booking"]["booking_id"]]
+    assert confirmed_count(env) == 1 and ex2.recover() == []
+
+
 def _booked(env, store, ap, ex, d):
     a = _granted(ap, d)
     return ex.book(a["id"])["booking"]

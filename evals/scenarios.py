@@ -418,6 +418,22 @@ def restart_before_side_effect(d):
              ("no booking created", not h2.confirmed())], rec[0].text if rec else "")
 
 
+@scenario("restart mid-booking", "book left unverified (timeout + status down) → after restart, recovery checks status and confirms once")
+def restart_reconciles_unverified_booking(d):
+    h = Harness(d, book_outcomes=["timeout_booked"], status_unavailable=True)
+    h.model.extend(h.search_and_request())
+    h.user("plumber in HSR this week")
+    first = h.user("yes").outcome["status"]
+    h.env.config.status_unavailable = False
+    h2 = h.restart()
+    rec = h2.agent.start()
+    return (f"{first} → recovered={[r.outcome['status'] for r in rec]}; bookings={len(h2.confirmed())}",
+            [("first reply unverified", first == "unverified"),
+             ("recovery confirmed it", [r.outcome["status"] for r in rec] == ["confirmed"]),
+             ("one booking, one book call", len(h2.confirmed()) == 1 and len(h2.calls("book")) == 1),
+             ("second start is quiet", h2.agent.start() == [])], "")
+
+
 # ---------------------------------------------------------------- memory
 @scenario("memory correction", "corrected preference supersedes old; only new value reaches the model")
 def memory_correction(d):

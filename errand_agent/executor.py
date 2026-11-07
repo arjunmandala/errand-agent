@@ -414,9 +414,10 @@ class Executor:
                 return
 
     def recover(self) -> list[dict]:
-        """Resolve every pending operation without blindly retrying a side effect."""
+        """Resolve every pending or unknown operation without blindly retrying a side effect."""
         outcomes: list[dict] = []
-        for op in self.store.operations_with_status("pending"):
+        ops = self.store.operations_with_status("pending") + self.store.operations_with_status("unknown")
+        for op in ops:
             kind = op.get("kind")
             if kind == "book":
                 outcomes.append(self._recover_book(op))
