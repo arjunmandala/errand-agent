@@ -539,3 +539,18 @@ def test_regression_tick_marks_a_cancellation_handled_only_after_telling_the_use
     env.search_providers = real
     notes = agent.tick()
     assert len(notes) == 1 and "cancelled" in notes[0].text
+
+
+def test_regression_explicit_memory_needs_the_whole_value_in_the_user_message(tmp_path):
+    """Bug: explicit memory was decided by substring, so after 'under 1500' a model-chosen budget_max=150 was
+    stored as explicit."""
+    agent, env, model = make(tmp_path, [call("remember_preference", key="budget_max", value="150"), say("ok"),
+                                        call("remember_preference", key="budget_max", value="1500"), say("ok"),
+                                        call("remember_preference", key="pets", value="cat"), say("ok")])
+    mem = Memory(agent.store, agent.clock)
+    agent.handle("plumber under 1500 please")
+    assert mem.list()[-1]["kind"] == "inferred"
+    agent.handle("keep my budget at ₹1,500")
+    assert mem.list()[-1]["kind"] == "explicit"
+    agent.handle("no pets, this is about my category of work")
+    assert mem.list()[-1]["kind"] == "inferred"

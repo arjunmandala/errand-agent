@@ -2,6 +2,7 @@
 an approval that only the user can grant. Returns (result_for_model, stop_reply_or_None)."""
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime
 
@@ -11,6 +12,17 @@ from errand_agent.workflow import State
 
 FORGET_WORDS = ("forget", "remove", "delete", "stop remembering", "don't remember", "dont remember")
 WINDOWS = {"morning": (0, 12), "afternoon": (12, 17), "evening": (17, 24)}
+
+
+def _norm(text) -> str:
+    """Lowercase, collapse spaces, and drop thousands commas so '₹1,500' reads as 1500."""
+    return re.sub(r"(?<=\d),(?=\d{3})", "", " ".join(str(text).lower().split()))
+
+
+def said_in(value, text: str) -> bool:
+    """True if the user's message holds the whole value: 150 does not match 1500, cat does not match category."""
+    v = _norm(value)
+    return bool(v) and re.search(rf"(?<!\w){re.escape(v)}(?!\w)", _norm(text or "")) is not None
 
 
 class Router:
@@ -200,7 +212,7 @@ class Router:
         return {"status": "asked"}, Reply(text=question, kind="message")
 
     def t_remember_preference(self, key, value, scope="global"):
-        said = str(value).lower() in (self.a.current_user_text or "").lower()
+        said = said_in(value, self.a.current_user_text)
         kind = "explicit" if said else "inferred"
         row = self.a.memory.remember(key, value, kind=kind, scope=scope or "global",
                                      source="user" if said else "model")
