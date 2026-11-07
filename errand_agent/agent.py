@@ -189,7 +189,7 @@ class Agent:
                 return self._finish(self._command(user_text.strip()))
             pending = self.store.pending_approval(self.session_id)
             if pending:
-                decision = parse_decision(user_text)
+                decision = parse_decision(user_text, pending["action"])
                 self.tracer.event("approval", event="decision_parsed", approval_id=pending["id"], decision=decision)
                 if decision == "confirm":
                     return self._finish(self._execute(pending, user_text))
