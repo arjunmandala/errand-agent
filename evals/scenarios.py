@@ -475,7 +475,7 @@ def booking_ids_unique_across_processes(d):
         h.model.extend(h.search_and_request())
         h.user("plumber in HSR this week")
         ids.append(h.user("yes").outcome["booking"]["booking_id"])
-    return (f"ids={ids}; ledger rows={len(h.store.bookings())}",
+    return (f"distinct ids={ids[0] != ids[1]}; ledger rows={len(h.store.bookings())}",
             [("distinct booking IDs", ids[0] != ids[1]), ("ledger keeps both", len(h.store.bookings()) == 2)], "")
 
 
