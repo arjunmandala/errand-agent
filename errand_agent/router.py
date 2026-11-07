@@ -8,7 +8,7 @@ from datetime import datetime
 
 from errand_agent.sanitize import redact, sanitize_tool_result
 from errand_agent.tools import TOOL_NAMES
-from errand_agent.workflow import State
+from errand_agent.workflow import State, normalize_time
 
 FORGET_WORDS = ("forget", "remove", "delete", "stop remembering", "don't remember", "dont remember")
 WINDOWS = {"morning": (0, 12), "afternoon": (12, 17), "evening": (17, 24)}
@@ -17,6 +17,14 @@ WINDOWS = {"morning": (0, 12), "afternoon": (12, 17), "evening": (17, 24)}
 def _norm(text) -> str:
     """Lowercase, collapse spaces, and drop thousands commas so '₹1,500' reads as 1500."""
     return re.sub(r"(?<=\d),(?=\d{3})", "", " ".join(str(text).lower().split()))
+
+
+def _cap(value) -> int:
+    """A budget as a number; 0 means no cap."""
+    try:
+        return int(_norm(value or 0))
+    except ValueError:
+        return 0
 
 
 def said_in(value, text: str) -> bool:
@@ -115,10 +123,32 @@ class Router:
         return result, stop
 
     # ---------------------------------------------------------------- tools
+    def _loosens(self, field: str, old, new) -> bool:
+        if field == "budget_max":
+            return _cap(old) > 0 and (_cap(new) == 0 or _cap(new) > _cap(old))
+        if field == "time_window":
+            return old not in (None, "any") and new != old
+        if field == "earliest_time":
+            return bool(old) and str(normalize_time(new) or "") < str(normalize_time(old))
+        return False
+
+    def _user_allows(self, field: str, new) -> bool:
+        """Only the user's current message may loosen a stated constraint, never tool or review text."""
+        text = self.a.current_user_text or ""
+        if field == "budget_max" and _cap(new) == 0:
+            return re.search(r"\b(no|any|remove|drop|without|lift|ignore)\b[^.?!]*\b(budget|cap|limit)\b", text,
+                             re.IGNORECASE) is not None
+        if field == "earliest_time":
+            said = re.findall(r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?", text, re.IGNORECASE)
+            return any(normalize_time(t) == normalize_time(new) for t in said)
+        return said_in(new, text)
+
     def t_update_request(self, **fields):
         wf = self.a.workflow
         before = dict(wf.request)
-        wf.update(**fields)
+        refused = sorted(k for k, v in fields.items() if v is not None and k in before
+                         and self._loosens(k, before[k], v) and not self._user_allows(k, v))
+        wf.update(**{k: v for k, v in fields.items() if k not in refused})
         changed = {k: v for k, v in wf.request.items() if before.get(k) != v}
         pending = self.a.store.pending_approval(self.a.session_id)
         if changed and pending:
@@ -126,7 +156,10 @@ class Router:
             self.a.tracer.event("approval", event="invalidated", approval_id=pending["id"], reason="request_changed",
                                 changed=changed)
             self.a.goto(State.COLLECTING)
-        return {"request": wf.request, "missing": wf.missing(), "changed": sorted(changed)}, None
+        out = {"request": wf.request, "missing": wf.missing(), "changed": sorted(changed)}
+        if refused:
+            out["refused"] = {"fields": refused, "reason": "only the user's own message can loosen these constraints"}
+        return out, None
 
     def t_search_providers(self, service=None, area=None, date_range=None):
         wf = self.a.workflow
