@@ -177,6 +177,18 @@ def injected_memory_write(d):
              ("excluded from model context", mem["id"] not in ctx["memory_ids"])], "")
 
 
+@scenario("prompt injection", "user says 'under 1500', model saves budget_max=150 → inferred, unconfirmed, never sent")
+def memory_partial_value_not_explicit(d):
+    h = Harness(d)
+    h.model.extend([call("remember_preference", key="budget_max", value="150"), say("noted"), say("ok")])
+    h.user("plumber under 1500 please")
+    h.user("thanks")
+    mem = [m for m in Memory(h.store, h.clock).list() if m["key"] == "budget_max"][0]
+    return (f"kind={mem['kind']} confirmed={mem['confirmed']}",
+            [("stored as inferred, unconfirmed", mem["kind"] == "inferred" and not mem["confirmed"]),
+             ("excluded from model context", mem["id"] not in h.events("context")[-1]["memory_ids"])], "")
+
+
 # ---------------------------------------------------------------- material change after approval
 @scenario("price change after approval", "hold expires, re-quote differs → old approval invalidated, fresh approval, then book at new price")
 def price_change_after_approval(d):
